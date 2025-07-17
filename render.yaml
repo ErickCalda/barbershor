@@ -1,0 +1,14 @@
+services:
+  - type: web
+    name: death-note-api
+    env: node
+    plan: free
+    branch: principal
+    buildCommand: npm install
+    startCommand: node src/app.js
+    healthCheckPath: /api/characters
+    envVars:
+      - key: PORT
+        value: 4001
+      - key: MONGODB_URI
+        value: mongodb+srv://joseporozocaicedo:joseporozo2002@joseporozo.r7bfl.mongodb.net/apipersonal

@@ -1,0 +1,40 @@
+Sobrenombre de la app
+Apis Rest
+ID de la app
+1:238597549460:web:59d0b72e4b081c23a83381
+Configuración del SDK
+
+npm
+
+CDN
+
+Config
+Si ya usas npm y un agrupador de módulos como Webpack o Rollup, puedes ejecutar el siguiente comando para instalar la versión más reciente del SDK (más información):
+
+npm install firebase
+Luego, inicializa Firebase y comienza a usar los SDK de los productos que quieres utilizar.
+
+// Import the functions you need from the SDKs you need
+import { initializeApp } from "firebase/app";
+import { getAnalytics } from "firebase/analytics";
+// TODO: Add SDKs for Firebase products that you want to use
+// https://firebase.google.com/docs/web/setup#available-libraries
+
+// Your web app's Firebase configuration
+// For Firebase JS SDK v7.20.0 and later, measurementId is optional
+const firebaseConfig = {
+  apiKey: "AIzaSyAby_NJ7qzsZAlAgM0ZSYAlCaAD63zKQoQ",
+  authDomain: "apis-practicas.firebaseapp.com",
+  projectId: "apis-practicas",
+  storageBucket: "apis-practicas.firebasestorage.app",
+  messagingSenderId: "238597549460",
+  appId: "1:238597549460:web:59d0b72e4b081c23a83381",
+  measurementId: "G-5WHRV98FZN"
+};
+
+// Initialize Firebase
+const app = initializeApp(firebaseConfig);
+const analytics = getAnalytics(app);
+Nota: Esta opción utiliza el SDK de JavaScript modular, que proporciona un tamaño reducido del SDK.
+
+Obtén más información sobre Firebase para la Web: primeros pasos, referencia de la API del SDK web y muestras
