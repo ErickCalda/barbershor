@@ -103,7 +103,7 @@ app.use(helmet({
 
 // Configuración de CORS
 app.use(cors({
-  origin: ['https://barbershor-2-kqh0.onrender.com'],
+  origin: ['https://fronten-berveria.vercel.app'],
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
