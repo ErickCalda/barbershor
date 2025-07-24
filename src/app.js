@@ -103,11 +103,12 @@ app.use(helmet({
 
 // Configuración de CORS
 app.use(cors({
-  origin: 'https://fronten-berveria.vercel.app',
+  origin: ['*'],
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
 }));
+
 
 // Middleware de logging
 if (process.env.NODE_ENV === 'development') {
