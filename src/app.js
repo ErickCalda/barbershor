@@ -103,11 +103,12 @@ app.use(helmet({
 
 // Configuración de CORS
 app.use(cors({
-  origin: ['*'],
+  origin: ['https://barbershor-2-kqh0.onrender.com'],
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
 }));
+
 
 
 // Middleware de logging
