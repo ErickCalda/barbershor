@@ -244,18 +244,22 @@ exports.getHorariosDisponibles = asyncHandler(async (req, res, next) => {
 exports.procesarReservacion = asyncHandler(async (req, res, next) => {
   try {
     const { empleadoId, servicios, fecha, horario, total } = req.body;
-    let clienteId = req.usuario.cliente_id;
+    let clienteId = req.usuario?.cliente_id;
 
     console.log('🔍 [reservacionController.procesarReservacion] Datos recibidos:', { empleadoId, servicios, fecha, horario, total });
 
+    // Validaciones básicas
     if (!empleadoId || !servicios || !fecha || !horario || !total) {
       return next(new ErrorResponse('Todos los campos son requeridos', 400));
     }
+    if (!Array.isArray(servicios) || servicios.length === 0) {
+      return next(new ErrorResponse('Debe seleccionar al menos un servicio', 400));
+    }
 
+    // Validar cliente
     if (!clienteId) {
       const clienteExistenteSql = 'SELECT id FROM clientes WHERE usuario_id = ?';
       const [clienteExistente] = await query(clienteExistenteSql, [req.usuario.id]);
-
       if (clienteExistente) {
         clienteId = clienteExistente.id;
       } else {
@@ -264,23 +268,29 @@ exports.procesarReservacion = asyncHandler(async (req, res, next) => {
         clienteId = result.insertId;
       }
     }
+    if (!clienteId) {
+      return next(new ErrorResponse('No se pudo identificar al cliente', 400));
+    }
 
+    // Calcular duración total
     const duracionTotal = servicios.reduce((totalDuracion, servicio) => {
-      return totalDuracion + ((servicio.duracion || 30) * servicio.cantidad);
+      // Asegura que servicio tenga duración y cantidad válidas
+      const duracion = Number(servicio.duracion) || 30;
+      const cantidad = Number(servicio.cantidad) || 1;
+      return totalDuracion + (duracion * cantidad);
     }, 0);
 
+    // Calcular fechas y horas
     const { inicio: horaInicio } = horario;
-
-    // Crear objeto Date con zona horaria local (-05:00)
+    if (!horaInicio) {
+      return next(new ErrorResponse('El horario seleccionado es inválido', 400));
+    }
     const inicio = new Date(`${fecha}T${horaInicio}:00-05:00`);
-    // Calcular fin sumando duración total en milisegundos
     const fin = new Date(inicio.getTime() + duracionTotal * 60000);
-
-    // Convertir a formato 'YYYY-MM-DD HH:mm:ss' en UTC para la BD
     const fechaHoraInicio = inicio.toISOString().slice(0, 19).replace('T', ' ');
     const fechaHoraFin = fin.toISOString().slice(0, 19).replace('T', ' ');
 
-    // Verificar disponibilidad antes de crear la cita
+    // Verificar disponibilidad
     const verificarDisponibilidadSql = `
       SELECT COUNT(*) as conflictos
       FROM citas
@@ -296,10 +306,9 @@ exports.procesarReservacion = asyncHandler(async (req, res, next) => {
           OR (TIME(CONVERT_TZ(fecha_hora_inicio, '+00:00', '-05:00')) >= ? AND TIME(CONVERT_TZ(fecha_hora_fin, '+00:00', '-05:00')) <= ?)
         )
     `;
-    
     const horaInicioFormateada = horaInicio + ':00';
     const horaFinFormateada = fin.toISOString().slice(11, 19);
-    
+
     const [verificacion] = await query(verificarDisponibilidadSql, [
       empleadoId, 
       fecha, 
@@ -310,11 +319,11 @@ exports.procesarReservacion = asyncHandler(async (req, res, next) => {
       horaInicioFormateada, 
       horaFinFormateada
     ]);
-    
     if (verificacion.conflictos > 0) {
       return next(new ErrorResponse('El empleado no está disponible en ese horario', 400));
     }
 
+    // Crear cita
     const insertCitaSql = `
       INSERT INTO citas (cliente_id, empleado_id, fecha_hora_inicio, fecha_hora_fin, estado_id, created_at, updated_at)
       VALUES (?, ?, ?, ?, 1, NOW(), NOW())
@@ -322,20 +331,19 @@ exports.procesarReservacion = asyncHandler(async (req, res, next) => {
     const resultadoCita = await query(insertCitaSql, [clienteId, empleadoId, fechaHoraInicio, fechaHoraFin]);
     const citaId = resultadoCita.insertId;
 
+    // Crear pago
     const insertPagoSql = `
       INSERT INTO pagos (cita_id, monto_total, metodo_pago_id, estado_pago_id, created_at, updated_at)
       VALUES (?, ?, 1, 1, NOW(), NOW())
     `;
     await query(insertPagoSql, [citaId, total]);
 
+    // Insertar servicios de la cita
     for (const servicio of servicios) {
       const precioServicioSql = 'SELECT precio FROM servicios WHERE id = ?';
       const [servicioData] = await query(precioServicioSql, [servicio.id]);
-
       if (!servicioData) continue;
-
       const precioUnitario = servicioData.precio;
-
       const insertDetalleSql = `
         INSERT INTO cita_servicio (cita_id, servicio_id, precio_aplicado, descuento, notas)
         VALUES (?, ?, ?, 0.00, NULL)
@@ -343,9 +351,12 @@ exports.procesarReservacion = asyncHandler(async (req, res, next) => {
       await query(insertDetalleSql, [citaId, servicio.id, precioUnitario]);
     }
 
+    // Notificación (no detiene el flujo si falla)
     try {
       await notificacionService.enviarNotificacionesConfirmacion(citaId);
-    } catch {}
+    } catch (e) {
+      console.warn('No se pudo enviar la notificación de confirmación:', e);
+    }
 
     res.status(200).json({
       success: true,
@@ -357,7 +368,6 @@ exports.procesarReservacion = asyncHandler(async (req, res, next) => {
     return next(new ErrorResponse('Error al procesar la reservación', 500));
   }
 });
-
 /**
  * @desc    Obtener citas del cliente
  * @route   GET /api/reservacion/mis-citas

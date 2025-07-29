@@ -7,16 +7,18 @@ require('dotenv').config();
 
 // Configuración de la base de datos
 const dbConfig = {
-  host: process.env.DB_HOST ,
-  user: process.env.DB_USER ,
-  password: process.env.DB_PASSWORD ,
-  database: process.env.DB_NAME ,
-  port: process.env.DB_PORT ,
+  host: process.env.DB_HOST,
+  user: process.env.DB_USER,
+  password: process.env.DB_PASSWORD,
+  database: process.env.DB_NAME,
+  port: process.env.DB_PORT,
   charset: 'utf8mb4',
   timezone: '+00:00',
   connectionLimit: 10,
   queueLimit: 0,
-  waitForConnections: true
+  waitForConnections: true,
+  connectTimeout: 10000, // 10 segundos para conectar
+  acquireTimeout: 10000  // 10 segundos para adquirir conexión del pool
 };
 
 // Crear pool de conexiones
@@ -115,27 +117,24 @@ pool.on('error', manejarErrorConexion);
 async function query(sql, params) {
   console.log('SQL:', sql);
   console.log('Parámetros:', params);
-  const [rows] = await pool.execute(sql, params);
-  return rows;
-  console.log('🔍 [database.query] Iniciando ejecución de query');
-  console.log('🔍 [database.query] SQL:', sql);
-  console.log('🔍 [database.query] Parámetros:', params);
-  
+
   try {
-    console.log('🔍 [database.query] Ejecutando pool.query...');
-    const [rows] = await pool.query(sql, params);
+    // Ejecutar la query y obtener resultados
+    const [rows] = await pool.execute(sql, params);
+
+    // Logs detallados de la respuesta
     console.log('🔍 [database.query] Query ejecutada exitosamente');
     console.log('🔍 [database.query] Filas retornadas:', rows.length);
-    
+
     if (rows.length > 0) {
       console.log('🔍 [database.query] Primera fila de ejemplo:', {
         keys: Object.keys(rows[0]),
         sampleData: Object.fromEntries(
-          Object.entries(rows[0]).slice(0, 5) // Solo mostrar los primeros 5 campos
+          Object.entries(rows[0]).slice(0, 5) // Mostrar primeros 5 campos
         )
       });
     }
-    
+
     return rows;
   } catch (error) {
     console.error('❌ [database.query] Error ejecutando query:', error);
@@ -148,7 +147,6 @@ async function query(sql, params) {
     throw error;
   }
 }
-
 
 module.exports = {
   pool,
