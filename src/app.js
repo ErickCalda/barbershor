@@ -101,14 +101,23 @@ app.use(helmet({
   crossOriginEmbedderPolicy: false
 }));
 
-// Configuración de CORS
+const whitelist = [
+  'https://barbershop-good-meet.vercel.app', // producción
+  'http://localhost:3000'                    // desarrollo local
+];
+
 app.use(cors({
-  origin: ['http://localhost:5173'],
+  origin: (origin, callback) => {
+    if (!origin || whitelist.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error('No autorizado por CORS'));
+    }
+  },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
 }));
-
 
 
 // Middleware de logging
