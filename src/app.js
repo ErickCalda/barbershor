@@ -103,7 +103,7 @@ app.use(helmet({
 
 const whitelist = [
   'https://barbershop-good-meet.vercel.app', // producción
-  'http://localhost:3000'                    // desarrollo local
+  'http://localhost:5173'                    // desarrollo local
 ];
 
 app.use(cors({
