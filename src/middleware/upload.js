@@ -21,9 +21,10 @@ const storage = multer.diskStorage({
     let uploadDir = 'uploads/';
 
     // Se fuerza automáticamente a guardar en 'servicios' para uploadService
-    if (req.uploadType === 'servicio') {
-      uploadDir = 'uploads/servicios/';
-    } else if (req.body.tipo === 'perfil') {
+if (req.uploadType === 'servicio') {
+  uploadDir = 'uploads/media/';
+}
+else if (req.body.tipo === 'perfil') {
       uploadDir = 'uploads/perfiles/';
     } else if (req.body.tipo === 'galeria') {
       uploadDir = 'uploads/galeria/';
@@ -72,7 +73,7 @@ const upload = multer({
 
 // ⚠️ Se envuelve multer para que sepa automáticamente que es una imagen de tipo 'servicio'
 const uploadService = (req, res, next) => {
-  req.uploadType = 'servicio'; // Esto fuerza el tipo a 'servicio'
+  req.uploadType = 'media'; // Esto fuerza el tipo a 'servicio'
   upload.single('imagen_servicio')(req, res, next);
 };
 
