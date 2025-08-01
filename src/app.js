@@ -128,14 +128,13 @@ if (process.env.NODE_ENV === 'development') {
   
 }
 
-app.use('/uploads', (req, res, next) => {
+app.use('/uploads/servicios', (req, res, next) => {
   res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
   next();
 });
 
-// Middleware para servir archivos estáticos (imágenes)
-app.use('/uploads', express.static('uploads'));
-
+// Servir estáticos desde la carpeta uploads/servicio
+app.use('/uploads/servicios', express.static('uploads/servicios'));
 // Middleware de parsing
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
