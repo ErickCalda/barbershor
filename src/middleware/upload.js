@@ -22,7 +22,7 @@ const storage = multer.diskStorage({
 
     // Se fuerza automáticamente a guardar en 'servicios' para uploadService
 if (req.uploadType === 'servicio') {
-  uploadDir = 'uploads/media/';
+  uploadDir = 'uploads/servicios/';
 }
 else if (req.body.tipo === 'perfil') {
       uploadDir = 'uploads/perfiles/';
