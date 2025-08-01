@@ -36,7 +36,7 @@ dist/
 build/
 tmp/
 temp/
-uploads/
+
 
 # OS-specific
 .DS_Store
