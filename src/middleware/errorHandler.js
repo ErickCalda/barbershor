@@ -141,6 +141,15 @@ class PermissionError extends Error {
   }
 }
 
+class ErrorResponse extends Error {
+  constructor(message, statusCode = 400) {
+    super(message);
+    this.name = 'ValidationError'; // o 'ConflictError' si aplica mejor
+    this.statusCode = statusCode;
+  }
+}
+
+
 class ValidationError extends Error {
   constructor(message) {
     super(message);
@@ -221,6 +230,8 @@ const rateLimiter = (maxRequests = 100, windowMs = 15 * 60 * 1000) => {
   };
 };
 
+
+
 module.exports = {
   errorHandler,
   notFoundHandler,
@@ -230,5 +241,6 @@ module.exports = {
   PermissionError,
   ValidationError,
   NotFoundError,
-  ConflictError
+  ConflictError,
+  ErrorResponse 
 }; 

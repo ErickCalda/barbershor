@@ -1,6 +1,8 @@
 const AusenciaEmpleado = require('../models/AusenciaEmpleado');
 const asyncHandler = require('../middleware/asyncHandler');
 
+const { query } = require('../config/database');
+
 class ErrorResponse extends Error {
     constructor(message, statusCode, errors = null) {
         super(message);
@@ -145,4 +147,52 @@ exports.getAusenciasPorRango = asyncHandler(async (req, res, next) => {
     } catch (error) {
         next(new ErrorResponse(error.message, 500));
     }
+
+    // @desc    Verificar si un empleado está disponible en una fecha específica
+// @param   empleado_id, fecha_reserva (string ISO)
+// @returns true si está disponible, false si tiene ausencia aprobada
+// En ausenciaEmpleadoController.js
+
+
 }); 
+
+
+
+exports.verificarDisponibilidadEmpleado = async (empleado_id, fecha_reserva) => {
+  try {
+    const sql = `
+      SELECT u.nombre, u.apellido, ae.fecha_inicio, ae.fecha_fin
+      FROM ausencias_empleados ae
+      JOIN empleados e ON ae.empleado_id = e.id
+      JOIN usuarios u ON e.usuario_id = u.id
+      WHERE ae.empleado_id = ?
+        AND ae.aprobada = 1
+        AND ae.fecha_inicio <= ?
+        AND ae.fecha_fin >= ?
+    `;
+
+    const ausencias = await query(sql, [empleado_id, fecha_reserva, fecha_reserva]);
+
+    if (ausencias.length > 0) {
+      const { nombre, apellido, fecha_inicio, fecha_fin } = ausencias[0];
+const fechaRegreso = new Date(fecha_fin);
+const opciones = { year: 'numeric', month: 'short', day: 'numeric' };
+const fechaRegresoFormateada = fechaRegreso.toLocaleDateString('es-ES', opciones);
+
+const msg = `👋 ${nombre} ${apellido} no disponible. Vuelvo apartir de el ${fechaRegresoFormateada} ✅`;
+console.log(msg);
+
+
+
+      console.log(msg);
+      return { disponible: false, mensaje: msg };
+    }
+
+    // Disponible
+    return { disponible: true, mensaje: 'Empleado disponible para la fecha seleccionada' };
+  } catch (error) {
+    const msg = `Error verificando disponibilidad: ${error.message}`;
+    console.error(msg);
+    return { disponible: false, mensaje: msg, error: true };
+  }
+};

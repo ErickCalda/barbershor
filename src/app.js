@@ -272,6 +272,8 @@ app.get('/', (req, res) => {
   });
 });
 
+
+require('./jobs/empleadosEstadoJob');
 // Middleware para rutas no encontradas
 app.use('*', (req, res) => {
   res.status(404).json({
