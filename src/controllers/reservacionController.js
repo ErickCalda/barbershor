@@ -103,8 +103,9 @@ exports.getEmpleadosDisponibles = asyncHandler(async (req, res, next) => {
         AND e.id NOT IN (
           SELECT ae.empleado_id
           FROM ausencias_empleados ae
-          WHERE ae.aprobada = 1
-            AND ? BETWEEN ae.fecha_inicio AND ae.fecha_fin
+          WHERE ae.motivo IN ('Vacaciones', 'Enfermedad', 'Permiso', 'Otro')
+            AND ? BETWEEN DATE(CONVERT_TZ(ae.fecha_inicio, '+00:00', '-05:00')) 
+                       AND DATE(CONVERT_TZ(ae.fecha_fin, '+00:00', '-05:00'))
         )
       `;
     }
@@ -206,13 +207,27 @@ exports.getHorariosDisponibles = asyncHandler(async (req, res, next) => {
         AND DATE(CONVERT_TZ(fecha_hora_inicio, '+00:00', '-05:00')) = ?
         AND estado_id NOT IN (
           SELECT id FROM estados_citas 
-          WHERE nombre IN ('Cancelada', 'No Asistió')
+          WHERE nombre IN ('Cancelada', 'No Presentó')
         )
     `;
 
     const horariosOcupados = await query(sqlHorariosOcupados, [empleadoIdInt, fecha]);
 
     console.log('🔍 [reservacionController.getHorariosDisponibles] Horarios ocupados:', horariosOcupados);
+
+    // Consultar ausencias del empleado para la fecha específica
+    const sqlAusencias = `
+      SELECT 
+        TIME(CONVERT_TZ(fecha_inicio, '+00:00', '-05:00')) as hora_inicio,
+        TIME(CONVERT_TZ(fecha_fin, '+00:00', '-05:00')) as hora_fin
+      FROM ausencias_empleados
+      WHERE empleado_id = ? 
+        AND DATE(CONVERT_TZ(fecha_inicio, '+00:00', '-05:00')) = ?
+        AND motivo IN ('Vacaciones', 'Enfermedad', 'Permiso', 'Otro')
+    `;
+
+    const ausencias = await query(sqlAusencias, [empleadoIdInt, fecha]);
+    console.log('🔍 [reservacionController.getHorariosDisponibles] Ausencias del empleado:', ausencias);
 
     // Función para convertir 'HH:MM' a minutos totales para comparación numérica
     const horaATotalMinutos = (hora) => {
@@ -224,8 +239,8 @@ exports.getHorariosDisponibles = asyncHandler(async (req, res, next) => {
       const inicioHorario = horaATotalMinutos(horario.inicio);
       const finHorario = horaATotalMinutos(horario.fin);
 
-      // Si algún horario ocupado se solapa, filtramos fuera ese horario disponible
-      return !horariosOcupados.some(ocupado => {
+      // Verificar si hay citas ocupadas que se solapan
+      const hayCitasOcupadas = horariosOcupados.some(ocupado => {
         const inicioOcupado = horaATotalMinutos(ocupado.hora_inicio);
         const finOcupado = horaATotalMinutos(ocupado.hora_fin);
 
@@ -233,9 +248,28 @@ exports.getHorariosDisponibles = asyncHandler(async (req, res, next) => {
           inicioHorario < finOcupado && finHorario > inicioOcupado
         );
       });
+
+      // Verificar si hay ausencias que se solapan
+      const hayAusencias = ausencias.some(ausencia => {
+        const inicioAusencia = horaATotalMinutos(ausencia.hora_inicio);
+        const finAusencia = horaATotalMinutos(ausencia.hora_fin);
+
+        return (
+          inicioHorario < finAusencia && finHorario > inicioAusencia
+        );
+      });
+
+      // El horario está disponible si no hay citas ocupadas Y no hay ausencias
+      return !hayCitasOcupadas && !hayAusencias;
     });
 
     console.log('🔍 [reservacionController.getHorariosDisponibles] Horarios disponibles filtrados:', horariosLibres);
+    console.log('🔍 [reservacionController.getHorariosDisponibles] Resumen:', {
+      totalHorarios: horariosDisponibles.length,
+      horariosOcupados: horariosOcupados.length,
+      ausencias: ausencias.length,
+      horariosDisponibles: horariosLibres.length
+    });
 
     res.status(200).json({
       success: true,
@@ -326,10 +360,20 @@ exports.procesarReservacion = asyncHandler(async (req, res, next) => {
       return next(new ErrorResponse('El empleado no está disponible en ese horario (conflicto con otra cita)', 400));
     }
 
-    // Verificar ausencias aprobadas
-    const { disponible, mensaje } = await verificarDisponibilidadEmpleado(empleadoId, fecha);
-    if (!disponible) {
-      return next(new ErrorResponse(mensaje, 400));
+    // Verificar ausencias del empleado
+    const sqlVerificarAusencias = `
+      SELECT COUNT(*) as total
+      FROM ausencias_empleados
+      WHERE empleado_id = ?
+        AND motivo IN ('Vacaciones', 'Enfermedad', 'Permiso', 'Otro')
+        AND ? BETWEEN DATE(CONVERT_TZ(fecha_inicio, '+00:00', '-05:00')) 
+                   AND DATE(CONVERT_TZ(fecha_fin, '+00:00', '-05:00'))
+    `;
+    
+    const [verificacionAusencias] = await query(sqlVerificarAusencias, [empleadoId, fecha]);
+    
+    if (verificacionAusencias.total > 0) {
+      return next(new ErrorResponse('El empleado no está disponible en esa fecha debido a una ausencia', 400));
     }
 
     // Crear cita
