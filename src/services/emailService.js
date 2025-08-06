@@ -1,5 +1,6 @@
 const nodemailer = require('nodemailer');
 const { query } = require('../config/database');
+const { formatearFechaParaEmail, formatearRangoFechas } = require('../utils/dateUtils');
 
 class EmailService {
   constructor() {
@@ -111,12 +112,8 @@ class EmailService {
   }
 
   generarTemplateConfirmacion(cita) {
-    const fecha = new Date(cita.fecha_hora_inicio).toLocaleDateString('es-ES', {
-      weekday: 'long',
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric'
-    });
+    const fechaFormateada = formatearFechaParaEmail(cita.fecha_hora_inicio);
+    const rangoHoras = formatearRangoFechas(cita.fecha_hora_inicio, cita.fecha_hora_fin);
 
     return `
       <!DOCTYPE html>
@@ -148,8 +145,8 @@ class EmailService {
             
             <div class="details">
               <h3>📅 Detalles de la Cita</h3>
-              <p><strong>Fecha:</strong> ${fecha}</p>
-              <p><strong>Hora:</strong> ${cita.fecha_hora_inicio} - ${cita.fecha_hora_fin}</p>
+              <p><strong>Fecha:</strong> ${fechaFormateada.fecha}</p>
+              <p><strong>Hora:</strong> ${rangoHoras.rangoCompleto}</p>
               <p><strong>Barbero:</strong> ${cita.empleado_nombre}</p>
               <p><strong>Servicios:</strong> ${cita.servicios}</p>
             </div>
@@ -170,12 +167,8 @@ class EmailService {
   }
 
   generarTemplateRecordatorio(cita) {
-    const fecha = new Date(cita.fecha_hora_inicio).toLocaleDateString('es-ES', {
-      weekday: 'long',
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric'
-    });
+    const fechaFormateada = formatearFechaParaEmail(cita.fecha_hora_inicio);
+    const rangoHoras = formatearRangoFechas(cita.fecha_hora_inicio, cita.fecha_hora_fin);
 
     return `
       <!DOCTYPE html>
@@ -207,8 +200,8 @@ class EmailService {
             
             <div class="details">
               <h3>📅 Detalles de la Cita</h3>
-              <p><strong>Fecha:</strong> ${fecha}</p>
-              <p><strong>Hora:</strong> ${cita.fecha_hora_inicio} - ${cita.fecha_hora_fin}</p>
+              <p><strong>Fecha:</strong> ${fechaFormateada.fecha}</p>
+              <p><strong>Hora:</strong> ${rangoHoras.rangoCompleto}</p>
               <p><strong>Barbero:</strong> ${cita.empleado_nombre}</p>
               <p><strong>Servicios:</strong> ${cita.servicios}</p>
             </div>

@@ -3,6 +3,7 @@ const { google } = require('googleapis');
 const emailService = require('./emailService');
 const googleCalendarService = require('./googleCalendarService');
 const notificacionPushService = require('./notificacionPushService');
+const { formatearFechaHora } = require('../utils/dateUtils');
 
 /**
  * Servicio para manejar notificaciones y Google Calendar
@@ -46,7 +47,9 @@ class NotificacionService {
       `;
       
       const titulo = 'Cita Confirmada';
-      const mensaje = `Tu cita para ${info.servicio_nombre} con ${info.empleado_nombre} ha sido confirmada para el ${new Date(fecha_hora_inicio).toLocaleDateString('es-ES')} a las ${new Date(fecha_hora_inicio).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}.`;
+      const fecha = formatearFechaHora(fecha_hora_inicio, 'corta');
+      const hora = formatearFechaHora(fecha_hora_inicio, 'solo_hora');
+      const mensaje = `Tu cita para ${info.servicio_nombre} con ${info.empleado_nombre} ha sido confirmada para el ${fecha} a las ${hora}.`;
       const datosAdicionales = JSON.stringify({
         cita_id,
         fecha_hora_inicio,
@@ -280,7 +283,8 @@ class NotificacionService {
       `;
       
       const titulo = 'Recordatorio de Cita';
-      const mensaje = `Recordatorio: Tienes una cita mañana para ${info.servicio_nombre} con ${info.empleado_nombre} a las ${new Date(fecha_hora_inicio).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}.`;
+      const hora = formatearFechaHora(fecha_hora_inicio, 'solo_hora');
+      const mensaje = `Recordatorio: Tienes una cita mañana para ${info.servicio_nombre} con ${info.empleado_nombre} a las ${hora}.`;
       const datosAdicionales = JSON.stringify({
         cita_id,
         fecha_hora_inicio,

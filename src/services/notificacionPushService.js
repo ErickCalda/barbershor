@@ -1,6 +1,7 @@
 const { admin } = require('../config/firebaseAdmin');
 const { query } = require('../config/database');
 const emailService = require('./emailService');
+const { formatearFechaHora } = require('../utils/dateUtils');
 
 class NotificacionPushService {
   constructor() {
@@ -71,8 +72,8 @@ class NotificacionPushService {
       }
 
       const fcmTokens = tokens.map(t => t.token_dispositivo);
-      const fecha = new Date(cita.fecha_hora_inicio).toLocaleDateString('es-ES');
-      const hora = new Date(cita.fecha_hora_inicio).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
+      const fecha = formatearFechaHora(cita.fecha_hora_inicio, 'corta');
+      const hora = formatearFechaHora(cita.fecha_hora_inicio, 'solo_hora');
 
       const message = {
         notification: {
@@ -171,8 +172,8 @@ class NotificacionPushService {
       }
 
       const fcmTokens = tokens.map(t => t.token_dispositivo);
-      const fecha = new Date(cita.fecha_hora_inicio).toLocaleDateString('es-ES');
-      const hora = new Date(cita.fecha_hora_inicio).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
+      const fecha = formatearFechaHora(cita.fecha_hora_inicio, 'corta');
+      const hora = formatearFechaHora(cita.fecha_hora_inicio, 'solo_hora');
 
       const message = {
         notification: {
@@ -250,8 +251,8 @@ class NotificacionPushService {
         console.log('⚠️ [notificacionPushService.enviarNotificacionEmpleado] No se encontraron tokens FCM para el empleado. Enviando correo electrónico.');
         // Enviar correo electrónico al empleado
         if (cita.empleado_email) {
-          const fecha = new Date(cita.fecha_hora_inicio).toLocaleDateString('es-ES');
-          const hora = new Date(cita.fecha_hora_inicio).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
+          const fecha = formatearFechaHora(cita.fecha_hora_inicio, 'corta');
+          const hora = formatearFechaHora(cita.fecha_hora_inicio, 'solo_hora');
           const asunto = '📅 Nueva Cita Asignada';
           const mensaje = `Tienes una cita con ${cita.cliente_nombre} el ${fecha} a las ${hora}. Servicios: ${cita.servicios}`;
           await emailService.transporter.sendMail({
@@ -272,8 +273,8 @@ class NotificacionPushService {
         console.log('⚠️ [notificacionPushService.enviarNotificacionEmpleado] Firebase no disponible, enviando solo correo electrónico.');
         // Enviar correo electrónico al empleado como respaldo
         if (cita.empleado_email) {
-          const fecha = new Date(cita.fecha_hora_inicio).toLocaleDateString('es-ES');
-          const hora = new Date(cita.fecha_hora_inicio).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
+          const fecha = formatearFechaHora(cita.fecha_hora_inicio, 'corta');
+          const hora = formatearFechaHora(cita.fecha_hora_inicio, 'solo_hora');
           const asunto = '📅 Nueva Cita Asignada';
           const mensaje = `Tienes una cita con ${cita.cliente_nombre} el ${fecha} a las ${hora}. Servicios: ${cita.servicios}`;
           await emailService.transporter.sendMail({
@@ -288,8 +289,8 @@ class NotificacionPushService {
       }
 
       const fcmTokens = tokens.map(t => t.token_dispositivo);
-      const fecha = new Date(cita.fecha_hora_inicio).toLocaleDateString('es-ES');
-      const hora = new Date(cita.fecha_hora_inicio).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
+      const fecha = formatearFechaHora(cita.fecha_hora_inicio, 'corta');
+      const hora = formatearFechaHora(cita.fecha_hora_inicio, 'solo_hora');
 
       const message = {
         notification: {
