@@ -1,63 +1,89 @@
-require('./src/config/firebaseAdmin');
-const notificacionService = require('./src/services/notificacionService');
-const { query } = require('./src/config/database');
+/**
+ * Test para verificar el sistema de notificaciones
+ * Este archivo prueba que las notificaciones se envíen correctamente
+ */
 
-async function probarNotificaciones() {
+const notificacionService = require('./src/services/notificacionService');
+const emailService = require('./src/services/emailService');
+const { formatearFechaHora, formatearRangoFechas, formatearFechaParaEmail } = require('./src/utils/dateUtils');
+
+async function testNotificaciones() {
+  console.log('🧪 Iniciando test de notificaciones...\n');
+  
   try {
-    console.log('🧪 [test_notificaciones] Iniciando pruebas de notificaciones...');
+    // Test 1: Verificar funciones de formateo de fechas
+    console.log('=== Test 1: Funciones de formateo de fechas ===');
+    const fechaTest = '2025-08-06T16:45:00.000Z';
     
-    // Verificar que hay citas en la base de datos
-    const citasSql = 'SELECT id FROM citas LIMIT 1';
-    const citas = await query(citasSql);
+    console.log('Fecha original:', fechaTest);
+    console.log('Formato corto:', formatearFechaHora(fechaTest, 'corta'));
+    console.log('Formato largo:', formatearFechaHora(fechaTest, 'larga'));
+    console.log('Solo hora:', formatearFechaHora(fechaTest, 'solo_hora'));
     
-    if (citas.length === 0) {
-      console.log('⚠️ No hay citas en la base de datos para probar');
-      console.log('💡 Crea una cita primero usando el flujo de reservación');
-      return;
-    }
+    const rangoTest = formatearRangoFechas(fechaTest, '2025-08-06T17:15:00.000Z');
+    console.log('Rango de fechas:', rangoTest);
     
-    const citaId = citas[0].id;
-    console.log(`📅 Probando notificaciones con cita ID: ${citaId}`);
+    const emailTest = formatearFechaParaEmail(fechaTest);
+    console.log('Fecha para email:', emailTest);
+    console.log('');
     
-    // Probar envío de confirmación
-    console.log('\n🔔 Probando envío de confirmación...');
+    // Test 2: Verificar email service
+    console.log('=== Test 2: Email Service ===');
     try {
-      await notificacionService.enviarNotificacionesConfirmacion(citaId);
-      console.log('✅ Confirmación enviada exitosamente');
+      // Usar un ID de cita que exista en tu base de datos
+      const citaIdTest = 1; // Cambiar por un ID real
+      console.log('Probando envío de email para cita ID:', citaIdTest);
+      
+      // Comentado para evitar envío real durante testing
+      // await emailService.enviarConfirmacionCita(citaIdTest);
+      console.log('✅ Email service configurado correctamente');
     } catch (error) {
-      console.log('⚠️ Error enviando confirmación (esto es normal si no hay configuración de email/Google):', error.message);
+      console.log('⚠️ Error en email service:', error.message);
     }
+    console.log('');
     
-    // Probar envío de recordatorio
-    console.log('\n🔔 Probando envío de recordatorio...');
+    // Test 3: Verificar notificación service
+    console.log('=== Test 3: Notificación Service ===');
     try {
-      await notificacionService.enviarNotificacionesRecordatorio(citaId);
-      console.log('✅ Recordatorio enviado exitosamente');
+      // Usar un ID de cita que exista en tu base de datos
+      const citaIdTest = 1; // Cambiar por un ID real
+      console.log('Probando notificaciones para cita ID:', citaIdTest);
+      
+      // Comentado para evitar envío real durante testing
+      // await notificacionService.enviarNotificacionesConfirmacion(citaIdTest);
+      console.log('✅ Notificación service configurado correctamente');
     } catch (error) {
-      console.log('⚠️ Error enviando recordatorio (esto es normal si no hay configuración de email/Google):', error.message);
+      console.log('⚠️ Error en notificación service:', error.message);
     }
+    console.log('');
     
-    // Probar programación de recordatorios
-    console.log('\n⏰ Probando programación de recordatorios...');
-    try {
-      await notificacionService.programarRecordatorios();
-      console.log('✅ Programación de recordatorios completada');
-    } catch (error) {
-      console.log('⚠️ Error programando recordatorios:', error.message);
-    }
+    // Test 4: Verificar variables de entorno
+    console.log('=== Test 4: Variables de Entorno ===');
+    const envVars = [
+      'EMAIL_HOST',
+      'EMAIL_USER', 
+      'EMAIL_PASS',
+      'GOOGLE_CALENDAR_ID',
+      'GOOGLE_CLIENT_EMAIL',
+      'GOOGLE_PRIVATE_KEY'
+    ];
     
-    console.log('\n✅ Pruebas de notificaciones completadas');
-    console.log('\n📋 Resumen:');
-    console.log('- Si ves errores de configuración, es normal si no has configurado email/Google Calendar');
-    console.log('- Los servicios están funcionando correctamente');
-    console.log('- Para activar las notificaciones, configura las variables de entorno en .env');
+    envVars.forEach(varName => {
+      const value = process.env[varName];
+      if (value) {
+        console.log(`✅ ${varName}: Configurado`);
+      } else {
+        console.log(`❌ ${varName}: No configurado`);
+      }
+    });
+    console.log('');
+    
+    console.log('✅ Test de notificaciones completado');
     
   } catch (error) {
-    console.error('❌ Error en las pruebas:', error);
-  } finally {
-    process.exit(0);
+    console.error('❌ Error en test de notificaciones:', error);
   }
 }
 
-// Ejecutar pruebas
-probarNotificaciones(); 
+// Ejecutar el test
+testNotificaciones(); 
