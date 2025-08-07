@@ -92,7 +92,7 @@ exports.getEmpleadosDisponibles = asyncHandler(async (req, res, next) => {
           WHERE DATE(CONVERT_TZ(c.fecha_hora_inicio, '+00:00', '-05:00')) = ?
             AND c.estado_id NOT IN (
               SELECT id FROM estados_citas 
-              WHERE nombre IN ('Cancelada', 'No Asistió')
+              WHERE nombre IN ('Cancelada', 'No Asistió', 'Pendiente')
             )
             AND (
               (TIME(CONVERT_TZ(c.fecha_hora_inicio, '+00:00', '-05:00')) < ? AND TIME(CONVERT_TZ(c.fecha_hora_fin, '+00:00', '-05:00')) > ?)
@@ -216,7 +216,7 @@ exports.getHorariosDisponibles = asyncHandler(async (req, res, next) => {
         AND DATE(CONVERT_TZ(fecha_hora_inicio, '+00:00', '-05:00')) = ?
         AND estado_id NOT IN (
           SELECT id FROM estados_citas 
-          WHERE nombre IN ('Cancelada', 'No Presentó')
+          WHERE nombre IN ('Cancelada', 'No Presentó', 'Pendiente')
         )
     `;
 
@@ -364,7 +364,7 @@ exports.procesarReservacion = asyncHandler(async (req, res, next) => {
         AND fecha_hora_inicio < ? 
         AND fecha_hora_fin > ?
         AND estado_id NOT IN (
-          SELECT id FROM estados_citas WHERE nombre IN ('Cancelada', 'No Presentó')
+          SELECT id FROM estados_citas WHERE nombre IN ('Cancelada', 'No Presentó', 'Pendiente')
         )
         AND DATE(CONVERT_TZ(fecha_hora_inicio, '+00:00', '-05:00')) = ?
     `;
