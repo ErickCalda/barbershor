@@ -104,8 +104,11 @@ exports.getEmpleadosDisponibles = asyncHandler(async (req, res, next) => {
           SELECT ae.empleado_id
           FROM ausencias_empleados ae
           WHERE ae.motivo IN ('Vacaciones', 'Enfermedad', 'Permiso', 'Otro')
-            AND ? BETWEEN DATE(CONVERT_TZ(ae.fecha_inicio, '+00:00', '-05:00')) 
-                       AND DATE(CONVERT_TZ(ae.fecha_fin, '+00:00', '-05:00'))
+            AND (
+              (ae.fecha_inicio < ? AND ae.fecha_fin > ?) OR
+              (ae.fecha_inicio < ? AND ae.fecha_fin > ?) OR
+              (ae.fecha_inicio >= ? AND ae.fecha_fin <= ?)
+            )
         )
       `;
     }
@@ -117,12 +120,18 @@ exports.getEmpleadosDisponibles = asyncHandler(async (req, res, next) => {
 
     let empleados;
     if (fecha && hora_inicio && hora_fin) {
+      // Convertir a UTC para comparación con ausencias
+      const fechaInicioUTC = new Date(`${fecha}T${hora_inicio}:00-05:00`).toISOString().slice(0, 19).replace('T', ' ');
+      const fechaFinUTC = new Date(`${fecha}T${hora_fin}:00-05:00`).toISOString().slice(0, 19).replace('T', ' ');
+      
       empleados = await query(sql, [
         fecha, // para filtro de citas
         hora_fin, hora_inicio, 
         hora_fin, hora_inicio, 
         hora_inicio, hora_fin,
-        fecha // para filtro de ausencias
+        fechaFinUTC, fechaInicioUTC,  // para filtro de ausencias - solapamiento tipo 1
+        fechaFinUTC, fechaInicioUTC,  // para filtro de ausencias - solapamiento tipo 2
+        fechaInicioUTC, fechaFinUTC   // para filtro de ausencias - solapamiento tipo 3
       ]);
     } else {
       empleados = await query(sql);
@@ -214,6 +223,7 @@ exports.getHorariosDisponibles = asyncHandler(async (req, res, next) => {
     const horariosOcupados = await query(sqlHorariosOcupados, [empleadoIdInt, fecha]);
 
     console.log('🔍 [reservacionController.getHorariosDisponibles] Horarios ocupados:', horariosOcupados);
+    console.log('🔍 [reservacionController.getHorariosDisponibles] SQL para horarios ocupados:', sqlHorariosOcupados);
 
     // Consultar ausencias del empleado para la fecha específica
     const sqlAusencias = `
@@ -228,6 +238,7 @@ exports.getHorariosDisponibles = asyncHandler(async (req, res, next) => {
 
     const ausencias = await query(sqlAusencias, [empleadoIdInt, fecha]);
     console.log('🔍 [reservacionController.getHorariosDisponibles] Ausencias del empleado:', ausencias);
+    console.log('🔍 [reservacionController.getHorariosDisponibles] SQL para ausencias:', sqlAusencias);
 
     // Función para convertir 'HH:MM' a minutos totales para comparación numérica
     const horaATotalMinutos = (hora) => {
@@ -294,6 +305,9 @@ exports.procesarReservacion = asyncHandler(async (req, res, next) => {
     const { empleadoId, servicios, fecha, horario, total } = req.body;
     let clienteId = req.usuario?.cliente_id;
 
+    console.log('🔍 [reservacionController.procesarReservacion] Iniciando procesamiento...');
+    console.log('🔍 [reservacionController.procesarReservacion] Datos recibidos:', { empleadoId, servicios, fecha, horario, total });
+
     // Validaciones básicas
     if (!empleadoId || !servicios || !fecha || !horario || !total) {
       return next(new ErrorResponse('Todos los campos son requeridos', 400));
@@ -335,8 +349,14 @@ exports.procesarReservacion = asyncHandler(async (req, res, next) => {
     const fechaHoraInicio = inicio.toISOString().slice(0, 19).replace('T', ' ');
     const fechaHoraFin = fin.toISOString().slice(0, 19).replace('T', ' ');
 
+    console.log('🔍 [reservacionController.procesarReservacion] Horarios calculados:', {
+      horaInicio,
+      duracionTotal,
+      fechaHoraInicio,
+      fechaHoraFin
+    });
+
     // Verificar conflictos de citas existentes con solapamiento real
-    // Consulta para buscar citas que se crucen con el rango [fechaHoraInicio, fechaHoraFin)
     const verificarDisponibilidadSql = `
       SELECT COUNT(*) as conflictos
       FROM citas
@@ -344,7 +364,7 @@ exports.procesarReservacion = asyncHandler(async (req, res, next) => {
         AND fecha_hora_inicio < ? 
         AND fecha_hora_fin > ?
         AND estado_id NOT IN (
-          SELECT id FROM estados_citas WHERE nombre IN ('Cancelada', 'No Asistió')
+          SELECT id FROM estados_citas WHERE nombre IN ('Cancelada', 'No Presentó')
         )
         AND DATE(CONVERT_TZ(fecha_hora_inicio, '+00:00', '-05:00')) = ?
     `;
@@ -356,24 +376,36 @@ exports.procesarReservacion = asyncHandler(async (req, res, next) => {
       fecha,
     ]);
 
+    console.log('🔍 [reservacionController.procesarReservacion] Verificación de citas:', verificacion);
+
     if (verificacion.conflictos > 0) {
       return next(new ErrorResponse('El empleado no está disponible en ese horario (conflicto con otra cita)', 400));
     }
 
-    // Verificar ausencias del empleado
+    // Verificar ausencias del empleado con tiempo de solapamiento
     const sqlVerificarAusencias = `
       SELECT COUNT(*) as total
       FROM ausencias_empleados
       WHERE empleado_id = ?
         AND motivo IN ('Vacaciones', 'Enfermedad', 'Permiso', 'Otro')
-        AND ? BETWEEN DATE(CONVERT_TZ(fecha_inicio, '+00:00', '-05:00')) 
-                   AND DATE(CONVERT_TZ(fecha_fin, '+00:00', '-05:00'))
+        AND (
+          (fecha_inicio < ? AND fecha_fin > ?) OR
+          (fecha_inicio < ? AND fecha_fin > ?) OR
+          (fecha_inicio >= ? AND fecha_fin <= ?)
+        )
     `;
     
-    const [verificacionAusencias] = await query(sqlVerificarAusencias, [empleadoId, fecha]);
+    const [verificacionAusencias] = await query(sqlVerificarAusencias, [
+      empleadoId, 
+      fechaHoraFin, fechaHoraInicio,  // Solapamiento tipo 1: ausencia cubre la cita
+      fechaHoraFin, fechaHoraInicio,  // Solapamiento tipo 2: ausencia empieza antes y termina durante
+      fechaHoraInicio, fechaHoraFin   // Solapamiento tipo 3: ausencia está completamente dentro de la cita
+    ]);
+    
+    console.log('🔍 [reservacionController.procesarReservacion] Verificación de ausencias:', verificacionAusencias);
     
     if (verificacionAusencias.total > 0) {
-      return next(new ErrorResponse('El empleado no está disponible en esa fecha debido a una ausencia', 400));
+      return next(new ErrorResponse('El empleado no está disponible en ese horario debido a una ausencia', 400));
     }
 
     // Crear cita
@@ -383,6 +415,8 @@ exports.procesarReservacion = asyncHandler(async (req, res, next) => {
     `;
     const resultadoCita = await query(insertCitaSql, [clienteId, empleadoId, fechaHoraInicio, fechaHoraFin]);
     const citaId = resultadoCita.insertId;
+
+    console.log('🔍 [reservacionController.procesarReservacion] Cita creada con ID:', citaId);
 
     // Crear pago
     const insertPagoSql = `
@@ -410,6 +444,8 @@ exports.procesarReservacion = asyncHandler(async (req, res, next) => {
     } catch (e) {
       console.warn('No se pudo enviar la notificación de confirmación:', e);
     }
+
+    console.log('🔍 [reservacionController.procesarReservacion] Reservación procesada exitosamente');
 
     res.status(200).json({
       success: true,
