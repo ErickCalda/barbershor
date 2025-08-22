@@ -112,8 +112,18 @@ class EmailService {
   }
 
   generarTemplateConfirmacion(cita) {
+    console.log('📧 [emailService] Datos de cita recibidos:', {
+      fecha_hora_inicio: cita.fecha_hora_inicio,
+      fecha_hora_fin: cita.fecha_hora_fin,
+      tipo_inicio: typeof cita.fecha_hora_inicio,
+      tipo_fin: typeof cita.fecha_hora_fin
+    });
+    
     const fechaFormateada = formatearFechaParaEmail(cita.fecha_hora_inicio);
     const rangoHoras = formatearRangoFechas(cita.fecha_hora_inicio, cita.fecha_hora_fin);
+    
+    console.log('📧 [emailService] Fecha formateada:', fechaFormateada);
+    console.log('📧 [emailService] Rango horas:', rangoHoras);
 
     return `
       <!DOCTYPE html>
