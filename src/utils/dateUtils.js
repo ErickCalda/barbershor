@@ -140,7 +140,10 @@ const formatearRangoFechas = (fechaInicio, fechaFin) => {
  */
 const formatearFechaParaEmail = (fechaString) => {
   try {
+    console.log('📅 [dateUtils] formatearFechaParaEmail - entrada:', fechaString, 'tipo:', typeof fechaString);
+    
     if (!fechaString) {
+      console.log('📅 [dateUtils] Fecha vacía, retornando N/A');
       return {
         fecha: "N/A",
         hora: "N/A",
@@ -148,10 +151,26 @@ const formatearFechaParaEmail = (fechaString) => {
       };
     }
     
-    const fechaIso = fechaString.includes(" ") ? fechaString.replace(" ", "T") : fechaString;
+    // Si es un objeto Date, convertirlo a string
+    if (fechaString instanceof Date) {
+      fechaString = fechaString.toISOString();
+    }
+    
+    // Si es un string de MySQL datetime, convertirlo a formato ISO
+    let fechaIso = fechaString;
+    if (typeof fechaString === 'string') {
+      // MySQL datetime format: "2024-01-15 14:30:00"
+      if (fechaString.includes(" ") && fechaString.includes("-")) {
+        fechaIso = fechaString.replace(" ", "T");
+      }
+    }
+    
+    console.log('📅 [dateUtils] Fecha ISO procesada:', fechaIso);
+    
     let fecha = new Date(fechaIso);
     
     if (isNaN(fecha.getTime())) {
+      console.log('📅 [dateUtils] Fecha inválida después de parseo');
       return {
         fecha: "N/A",
         hora: "N/A",
@@ -159,7 +178,9 @@ const formatearFechaParaEmail = (fechaString) => {
       };
     }
     
-    // Convertir a hora local de Ecuador
+    console.log('📅 [dateUtils] Fecha parseada correctamente:', fecha);
+    
+    // Convertir a hora local de Ecuador (UTC-5)
     fecha = new Date(fecha.getTime() - 5 * 60 * 60 * 1000);
     
     const fechaFormateada = fecha.toLocaleDateString("es-EC", {
@@ -176,11 +197,14 @@ const formatearFechaParaEmail = (fechaString) => {
     
     const fechaHoraCompleta = `${fechaFormateada}, ${horaFormateada}`;
     
-    return {
+    const resultado = {
       fecha: fechaFormateada,
       hora: horaFormateada,
       fechaHora: fechaHoraCompleta
     };
+    
+    console.log('📅 [dateUtils] Resultado final:', resultado);
+    return resultado;
   } catch (error) {
     console.error('Error formateando fecha para email:', error);
     return {
