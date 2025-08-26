@@ -104,6 +104,7 @@ exports.getEmpleadosDisponibles = asyncHandler(async (req, res, next) => {
           SELECT ae.empleado_id
           FROM ausencias_empleados ae
           WHERE ae.motivo IN ('Vacaciones', 'Enfermedad', 'Permiso', 'Otro')
+            AND ae.aprobada = 1
             AND (
               (ae.fecha_inicio < ? AND ae.fecha_fin > ?) OR
               (ae.fecha_inicio < ? AND ae.fecha_fin > ?) OR
@@ -207,6 +208,27 @@ exports.getHorariosDisponibles = asyncHandler(async (req, res, next) => {
       ];
     }
 
+    // Calcular ventana del día en UTC con base -05:00
+    const inicioDiaUTC = new Date(`${fecha}T00:00:00-05:00`).toISOString().slice(0, 19).replace('T', ' ');
+    const finDiaUTC = new Date(`${fecha}T23:59:59-05:00`).toISOString().slice(0, 19).replace('T', ' ');
+
+    // Si el empleado tiene ausencia aprobada que cubre el día, no retornar horarios
+    const sqlAusenciaDia = `
+      SELECT 1
+      FROM ausencias_empleados ae
+      WHERE ae.empleado_id = ?
+        AND ae.aprobada = 1
+        AND ae.motivo IN ('Vacaciones', 'Enfermedad', 'Permiso', 'Otro')
+        AND ae.fecha_inicio <= ?
+        AND ae.fecha_fin >= ?
+      LIMIT 1
+    `;
+
+    const ausenteDia = await query(sqlAusenciaDia, [empleadoIdInt, finDiaUTC, inicioDiaUTC]);
+    if (ausenteDia.length > 0) {
+      return res.status(200).json({ success: true, empleadoAusente: true, horarios: [], count: 0 });
+    }
+
     const sqlHorariosOcupados = `
       SELECT 
         TIME(CONVERT_TZ(fecha_hora_inicio, '+00:00', '-05:00')) as hora_inicio,
@@ -232,11 +254,13 @@ exports.getHorariosDisponibles = asyncHandler(async (req, res, next) => {
         TIME(CONVERT_TZ(fecha_fin, '+00:00', '-05:00')) as hora_fin
       FROM ausencias_empleados
       WHERE empleado_id = ? 
-        AND DATE(CONVERT_TZ(fecha_inicio, '+00:00', '-05:00')) = ?
+        AND aprobada = 1
         AND motivo IN ('Vacaciones', 'Enfermedad', 'Permiso', 'Otro')
+        AND fecha_inicio <= ?
+        AND fecha_fin >= ?
     `;
 
-    const ausencias = await query(sqlAusencias, [empleadoIdInt, fecha]);
+    const ausencias = await query(sqlAusencias, [empleadoIdInt, finDiaUTC, inicioDiaUTC]);
     console.log('🔍 [reservacionController.getHorariosDisponibles] Ausencias del empleado:', ausencias);
     console.log('🔍 [reservacionController.getHorariosDisponibles] SQL para ausencias:', sqlAusencias);
 
