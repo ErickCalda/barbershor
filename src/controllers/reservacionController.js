@@ -212,8 +212,16 @@ exports.getHorariosDisponibles = asyncHandler(async (req, res, next) => {
     const inicioDiaUTC = new Date(`${fecha}T00:00:00-05:00`).toISOString().slice(0, 19).replace('T', ' ');
     const finDiaUTC = new Date(`${fecha}T23:59:59-05:00`).toISOString().slice(0, 19).replace('T', ' ');
 
-    // Si el empleado tiene ausencia aprobada que cubre el día, no retornar horarios
-    const sqlAusenciaDia = `
+    // Calcular el horario de trabajo del día (primer y último horario disponible)
+    const primerHorarioHora = horariosDisponibles[0].inicio;
+    const ultimoHorarioHora = horariosDisponibles[horariosDisponibles.length - 1].fin;
+    
+    const primerHorarioUTC = new Date(`${fecha}T${primerHorarioHora}:00-05:00`).toISOString().slice(0, 19).replace('T', ' ');
+    const ultimoHorarioUTC = new Date(`${fecha}T${ultimoHorarioHora}:00-05:00`).toISOString().slice(0, 19).replace('T', ' ');
+
+    // Verificar si el empleado tiene ausencia aprobada que cubra COMPLETAMENTE el horario de trabajo del día
+    // Solo marcar empleadoAusente si la ausencia cubre desde antes del primer horario hasta después del último
+    const sqlAusenciaDiaCompleto = `
       SELECT 1
       FROM ausencias_empleados ae
       WHERE ae.empleado_id = ?
@@ -224,8 +232,8 @@ exports.getHorariosDisponibles = asyncHandler(async (req, res, next) => {
       LIMIT 1
     `;
 
-    const ausenteDia = await query(sqlAusenciaDia, [empleadoIdInt, finDiaUTC, inicioDiaUTC]);
-    if (ausenteDia.length > 0) {
+    const ausenteDiaCompleto = await query(sqlAusenciaDiaCompleto, [empleadoIdInt, ultimoHorarioUTC, primerHorarioUTC]);
+    if (ausenteDiaCompleto.length > 0) {
       return res.status(200).json({ success: true, empleadoAusente: true, horarios: [], count: 0 });
     }
 
@@ -247,7 +255,7 @@ exports.getHorariosDisponibles = asyncHandler(async (req, res, next) => {
     console.log('🔍 [reservacionController.getHorariosDisponibles] Horarios ocupados:', horariosOcupados);
     console.log('🔍 [reservacionController.getHorariosDisponibles] SQL para horarios ocupados:', sqlHorariosOcupados);
 
-    // Consultar ausencias del empleado para la fecha específica
+    // Consultar ausencias por horas específicas que se solapan con el día
     const sqlAusencias = `
       SELECT 
         TIME(CONVERT_TZ(fecha_inicio, '+00:00', '-05:00')) as hora_inicio,
@@ -256,11 +264,19 @@ exports.getHorariosDisponibles = asyncHandler(async (req, res, next) => {
       WHERE empleado_id = ? 
         AND aprobada = 1
         AND motivo IN ('Vacaciones', 'Enfermedad', 'Permiso', 'Otro')
-        AND fecha_inicio <= ?
-        AND fecha_fin >= ?
+        AND (
+          (fecha_inicio <= ? AND fecha_fin >= ?) OR  -- Ausencia cubre todo el día
+          (fecha_inicio <= ? AND fecha_fin >= ?) OR  -- Ausencia empieza antes y termina durante el día
+          (fecha_inicio >= ? AND fecha_fin <= ?)     -- Ausencia está completamente dentro del día
+        )
     `;
 
-    const ausencias = await query(sqlAusencias, [empleadoIdInt, finDiaUTC, inicioDiaUTC]);
+    const ausencias = await query(sqlAusencias, [
+      empleadoIdInt, 
+      finDiaUTC, inicioDiaUTC,      // Ausencia cubre todo el día
+      finDiaUTC, inicioDiaUTC,      // Ausencia empieza antes y termina durante
+      inicioDiaUTC, finDiaUTC       // Ausencia está completamente dentro del día
+    ]);
     console.log('🔍 [reservacionController.getHorariosDisponibles] Ausencias del empleado:', ausencias);
     console.log('🔍 [reservacionController.getHorariosDisponibles] SQL para ausencias:', sqlAusencias);
 
