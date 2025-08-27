@@ -289,7 +289,9 @@ exports.getHorariosDisponibles = asyncHandler(async (req, res, next) => {
                     (new Date(fecha) >= new Date(ausenciaInicioLocal.toISOString().split('T')[0]) && 
                      new Date(fecha) <= new Date(ausenciaFinLocal.toISOString().split('T')[0])),
         horaInicio: ausenciaInicioLocal.toTimeString().slice(0, 5),
-        horaFin: ausenciaFinLocal.toTimeString().slice(0, 5)
+        horaFin: ausenciaFinLocal.toTimeString().slice(0, 5),
+        horaInicioMinutos: horaATotalMinutos(ausenciaInicioLocal.toTimeString().slice(0, 5)),
+        horaFinMinutos: horaATotalMinutos(ausenciaFinLocal.toTimeString().slice(0, 5))
       });
     });
 
@@ -330,11 +332,13 @@ exports.getHorariosDisponibles = asyncHandler(async (req, res, next) => {
       
       // Si es el día de inicio de la ausencia, ocultar desde la hora de inicio
       if (fecha === ausenciaInicioDia) {
+        // Solo ocultar si el horario empieza DESPUÉS de la hora de inicio de ausencia
         return inicioMinutos >= ausenciaInicioMinutos;
       }
       
       // Si es el día de fin de la ausencia, ocultar hasta la hora de fin
       if (fecha === ausenciaFinDia) {
+        // Solo ocultar si el horario termina ANTES de la hora de fin de ausencia
         return finMinutos <= ausenciaFinMinutos;
       }
       
@@ -373,7 +377,8 @@ exports.getHorariosDisponibles = asyncHandler(async (req, res, next) => {
             horario: `${horario.inicio}-${horario.fin}`,
             ausencia: `${ausencia.fecha_inicio} a ${ausencia.fecha_fin}`,
             fechaConsultada: fecha,
-            resultado: resultado
+            resultado: resultado,
+            horarioMinutos: `${horaATotalMinutos(horario.inicio)}-${horaATotalMinutos(horario.fin)}`
           });
         }
         return resultado;
@@ -398,7 +403,8 @@ exports.getHorariosDisponibles = asyncHandler(async (req, res, next) => {
       horariosOcupados: horariosOcupados.length,
       ausencias: ausencias.length,
       horariosDisponibles: horariosLibres.length,
-      fechaConsultada: fecha
+      fechaConsultada: fecha,
+      horariosOcultos: horariosDisponibles.length - horariosLibres.length
     });
 
     // Solo marcar empleadoAusente si realmente no quedan horarios disponibles
@@ -416,6 +422,7 @@ exports.getHorariosDisponibles = asyncHandler(async (req, res, next) => {
 
     console.log('🔍 [reservacionController.getHorariosDisponibles] Hay horarios disponibles, retornando horarios normales');
     console.log('🔍 [reservacionController.getHorariosDisponibles] Horarios disponibles:', horariosLibres.map(h => `${h.inicio}-${h.fin}`));
+    console.log('🔍 [reservacionController.getHorariosDisponibles] Horarios ocultos:', horariosDisponibles.filter(h => !horariosLibres.includes(h)).map(h => `${h.inicio}-${h.fin}`));
     res.status(200).json({
       success: true,
       count: horariosLibres.length,
