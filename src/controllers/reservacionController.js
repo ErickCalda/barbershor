@@ -271,23 +271,32 @@ exports.getHorariosDisponibles = asyncHandler(async (req, res, next) => {
     
     // Debug: Mostrar cada ausencia procesada
     ausencias.forEach((ausencia, index) => {
-      const ausenciaInicio = new Date(ausencia.fecha_inicio);
-      const ausenciaFin = new Date(ausencia.fecha_fin);
+      // Convertir a string si es objeto Date, o usar directamente si es string
+      const fechaInicioStr = ausencia.fecha_inicio instanceof Date 
+        ? ausencia.fecha_inicio.toISOString() 
+        : ausencia.fecha_inicio;
+      const fechaFinStr = ausencia.fecha_fin instanceof Date 
+        ? ausencia.fecha_fin.toISOString() 
+        : ausencia.fecha_fin;
       
       // Solo convertir la hora, no la fecha
-      const ausenciaInicioLocal = new Date(ausencia.fecha_inicio.replace('T', ' ') + ' -05:00');
-      const ausenciaFinLocal = new Date(ausencia.fecha_fin.replace('T', ' ') + ' -05:00');
+      const ausenciaInicioLocal = new Date(fechaInicioStr.replace('T', ' ') + ' -05:00');
+      const ausenciaFinLocal = new Date(fechaFinStr.replace('T', ' ') + ' -05:00');
       
       console.log(`🔍 [AUSENCIA ${index + 1}]`, {
         original: { inicio: ausencia.fecha_inicio, fin: ausencia.fecha_fin },
-        fechaInicio: ausencia.fecha_inicio.split('T')[0],
-        fechaFin: ausencia.fecha_fin.split('T')[0],
+        tipo: { 
+          inicio: typeof ausencia.fecha_inicio, 
+          fin: typeof ausencia.fecha_fin 
+        },
+        fechaInicio: fechaInicioStr.split('T')[0],
+        fechaFin: fechaFinStr.split('T')[0],
         horaInicio: ausenciaInicioLocal.toTimeString().slice(0, 5),
         horaFin: ausenciaFinLocal.toTimeString().slice(0, 5),
-        afectaFecha: ausencia.fecha_inicio.split('T')[0] === fecha || 
-                    ausencia.fecha_fin.split('T')[0] === fecha ||
-                    (new Date(fecha) >= new Date(ausencia.fecha_inicio.split('T')[0]) && 
-                     new Date(fecha) <= new Date(ausencia.fecha_fin.split('T')[0])),
+        afectaFecha: fechaInicioStr.split('T')[0] === fecha || 
+                    fechaFinStr.split('T')[0] === fecha ||
+                    (new Date(fecha) >= new Date(fechaInicioStr.split('T')[0]) && 
+                     new Date(fecha) <= new Date(fechaFinStr.split('T')[0])),
         horaInicioMinutos: horaATotalMinutos(ausenciaInicioLocal.toTimeString().slice(0, 5)),
         horaFinMinutos: horaATotalMinutos(ausenciaFinLocal.toTimeString().slice(0, 5))
       });
@@ -301,21 +310,25 @@ exports.getHorariosDisponibles = asyncHandler(async (req, res, next) => {
 
     // Función para verificar si un horario está afectado por una ausencia
     const horarioEstaEnAusencia = (inicioHorario, finHorario, ausencia) => {
-      // Convertir las fechas de ausencia de UTC a hora local de Ecuador
-      const ausenciaInicio = new Date(ausencia.fecha_inicio);
-      const ausenciaFin = new Date(ausencia.fecha_fin);
+      // Convertir a string si es objeto Date, o usar directamente si es string
+      const fechaInicioStr = ausencia.fecha_inicio instanceof Date 
+        ? ausencia.fecha_inicio.toISOString() 
+        : ausencia.fecha_inicio;
+      const fechaFinStr = ausencia.fecha_fin instanceof Date 
+        ? ausencia.fecha_fin.toISOString() 
+        : ausencia.fecha_fin;
       
       // IMPORTANTE: Solo convertir la hora, NO la fecha
       // Las fechas deben mantenerse iguales, solo ajustar las horas
-      const ausenciaInicioLocal = new Date(ausencia.fecha_inicio.replace('T', ' ') + ' -05:00');
-      const ausenciaFinLocal = new Date(ausencia.fecha_fin.replace('T', ' ') + ' -05:00');
+      const ausenciaInicioLocal = new Date(fechaInicioStr.replace('T', ' ') + ' -05:00');
+      const ausenciaFinLocal = new Date(fechaFinStr.replace('T', ' ') + ' -05:00');
       
       // Extraer solo la fecha (sin hora) para comparar días - usar la fecha original
-      const ausenciaInicioDia = ausencia.fecha_inicio.split('T')[0];
-      const ausenciaFinDia = ausencia.fecha_fin.split('T')[0];
+      const ausenciaInicioDia = fechaInicioStr.split('T')[0];
+      const ausenciaFinDia = fechaFinStr.split('T')[0];
       
       console.log(`🔍 [HORARIO_AUSENCIA] Analizando horario ${inicioHorario}-${finHorario} para fecha ${fecha}`);
-      console.log(`🔍 [HORARIO_AUSENCIA] Ausencia BD: ${ausencia.fecha_inicio} a ${ausencia.fecha_fin}`);
+      console.log(`🔍 [HORARIO_AUSENCIA] Ausencia BD: ${fechaInicioStr} a ${fechaFinStr}`);
       console.log(`🔍 [HORARIO_AUSENCIA] Ausencia días: ${ausenciaInicioDia} a ${ausenciaFinDia}`);
       console.log(`🔍 [HORARIO_AUSENCIA] Hora inicio ausencia local: ${ausenciaInicioLocal.toTimeString().slice(0, 5)}`);
       console.log(`🔍 [HORARIO_AUSENCIA] Hora fin ausencia local: ${ausenciaFinLocal.toTimeString().slice(0, 5)}`);
