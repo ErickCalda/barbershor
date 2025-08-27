@@ -355,8 +355,18 @@ exports.getHorariosDisponibles = asyncHandler(async (req, res, next) => {
           
           return finMinutos <= ausenciaFinMinutos;
         } else {
-          // Ausencia cubre completamente este día
-          return true;
+          // Ausencia cubre completamente este día - NO marcar todo el día como ausente
+          // Solo verificar si el horario específico está dentro del rango de ausencia
+          const horaInicioAusencia = ausenciaInicioLocal.toTimeString().slice(0, 5);
+          const horaFinAusencia = ausenciaFinLocal.toTimeString().slice(0, 5);
+          
+          const inicioMinutos = horaATotalMinutos(inicioHorario);
+          const finMinutos = horaATotalMinutos(finHorario);
+          const ausenciaInicioMinutos = horaATotalMinutos(horaInicioAusencia);
+          const ausenciaFinMinutos = horaATotalMinutos(horaFinAusencia);
+          
+          // Solo ocultar si el horario se solapa con la ausencia
+          return (inicioMinutos < ausenciaFinMinutos && finMinutos > ausenciaInicioMinutos);
         }
       }
       
@@ -383,7 +393,8 @@ exports.getHorariosDisponibles = asyncHandler(async (req, res, next) => {
         if (resultado) {
           console.log(`🕐 [HORARIO] ${horario.inicio}-${horario.fin} afectado por ausencia:`, {
             horario: `${horario.inicio}-${horario.fin}`,
-            ausencia: `${ausencia.fecha_inicio} a ${ausencia.fecha_fin}`
+            ausencia: `${ausencia.fecha_inicio} a ${ausencia.fecha_fin}`,
+            fechaConsultada: fecha
           });
         }
         return resultado;
@@ -412,6 +423,7 @@ exports.getHorariosDisponibles = asyncHandler(async (req, res, next) => {
 
     // Solo marcar empleadoAusente si realmente no quedan horarios disponibles
     if (horariosLibres.length === 0) {
+      console.log('🔍 [reservacionController.getHorariosDisponibles] No hay horarios disponibles, marcando empleadoAusente: true');
       return res.status(200).json({ 
         success: true, 
         empleadoAusente: true, 
@@ -421,6 +433,7 @@ exports.getHorariosDisponibles = asyncHandler(async (req, res, next) => {
       });
     }
 
+    console.log('🔍 [reservacionController.getHorariosDisponibles] Hay horarios disponibles, retornando horarios normales');
     res.status(200).json({
       success: true,
       count: horariosLibres.length,
