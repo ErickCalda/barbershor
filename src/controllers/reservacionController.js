@@ -244,8 +244,8 @@ exports.getHorariosDisponibles = asyncHandler(async (req, res, next) => {
     // Consultar ausencias por horas específicas que se solapan con el día
     const sqlAusencias = `
       SELECT 
-        TIME(CONVERT_TZ(fecha_inicio, '+00:00', '-05:00')) as hora_inicio,
-        TIME(CONVERT_TZ(fecha_fin, '+00:00', '-05:00')) as hora_fin
+        fecha_inicio,
+        fecha_fin
       FROM ausencias_empleados
       WHERE empleado_id = ? 
         AND aprobada = 1
@@ -268,11 +268,99 @@ exports.getHorariosDisponibles = asyncHandler(async (req, res, next) => {
     console.log('🔍 [reservacionController.getHorariosDisponibles] Fecha consultada:', fecha);
     console.log('🔍 [reservacionController.getHorariosDisponibles] Ventana del día:', { inicioDiaUTC, finDiaUTC });
     console.log('🔍 [reservacionController.getHorariosDisponibles] Horario de trabajo:', { primerHorarioHora, ultimoHorarioHora });
+    
+    // Debug: Mostrar cada ausencia procesada
+    ausencias.forEach((ausencia, index) => {
+      const ausenciaInicio = new Date(ausencia.fecha_inicio);
+      const ausenciaFin = new Date(ausencia.fecha_fin);
+      const ausenciaInicioLocal = new Date(ausenciaInicio.getTime() - 5 * 60 * 60 * 1000);
+      const ausenciaFinLocal = new Date(ausenciaFin.getTime() - 5 * 60 * 60 * 1000);
+      
+      console.log(`🔍 [AUSENCIA ${index + 1}]`, {
+        original: { inicio: ausencia.fecha_inicio, fin: ausencia.fecha_fin },
+        local: { 
+          inicio: ausenciaInicioLocal.toISOString(), 
+          fin: ausenciaFinLocal.toISOString() 
+        },
+        diaInicio: ausenciaInicioLocal.toISOString().split('T')[0],
+        diaFin: ausenciaFinLocal.toISOString().split('T')[0],
+        afectaFecha: ausenciaInicioLocal.toISOString().split('T')[0] === fecha || 
+                    ausenciaFinLocal.toISOString().split('T')[0] === fecha ||
+                    (new Date(fecha) >= new Date(ausenciaInicioLocal.toISOString().split('T')[0]) && 
+                     new Date(fecha) <= new Date(ausenciaFinLocal.toISOString().split('T')[0]))
+      });
+    });
 
     // Función para convertir 'HH:MM' a minutos totales para comparación numérica
     const horaATotalMinutos = (hora) => {
       const [h, m] = hora.split(":").map(Number);
       return h * 60 + m;
+    };
+
+    // Función para verificar si un horario está afectado por una ausencia
+    const horarioEstaEnAusencia = (inicioHorario, finHorario, ausencia) => {
+      // Convertir las fechas de ausencia de UTC a hora local de Ecuador
+      const ausenciaInicio = new Date(ausencia.fecha_inicio);
+      const ausenciaFin = new Date(ausencia.fecha_fin);
+      
+      // Convertir a hora local de Ecuador (UTC-5)
+      const ausenciaInicioLocal = new Date(ausenciaInicio.getTime() - 5 * 60 * 60 * 1000);
+      const ausenciaFinLocal = new Date(ausenciaFin.getTime() - 5 * 60 * 60 * 1000);
+      
+      // Extraer solo la fecha (sin hora) para comparar días
+      const ausenciaInicioDia = ausenciaInicioLocal.toISOString().split('T')[0];
+      const ausenciaFinDia = ausenciaFinLocal.toISOString().split('T')[0];
+      
+      // Si la ausencia no es del día que estamos consultando, no afecta
+      if (ausenciaInicioDia !== fecha && ausenciaFinDia !== fecha) {
+        // Verificar si la ausencia cruza el día actual
+        const fechaActual = new Date(fecha);
+        const ausenciaInicioDate = new Date(ausenciaInicioDia);
+        const ausenciaFinDate = new Date(ausenciaFinDia);
+        
+        if (fechaActual < ausenciaInicioDate || fechaActual > ausenciaFinDate) {
+          return false;
+        }
+      }
+      
+      // Si la ausencia es del día actual, verificar horas específicas
+      if (ausenciaInicioDia === fecha && ausenciaFinDia === fecha) {
+        // Ausencia solo para este día, verificar horas
+        const horaInicioAusencia = ausenciaInicioLocal.toTimeString().slice(0, 5);
+        const horaFinAusencia = ausenciaFinLocal.toTimeString().slice(0, 5);
+        
+        const inicioMinutos = horaATotalMinutos(inicioHorario);
+        const finMinutos = horaATotalMinutos(finHorario);
+        const ausenciaInicioMinutos = horaATotalMinutos(horaInicioAusencia);
+        const ausenciaFinMinutos = horaATotalMinutos(horaFinAusencia);
+        
+        // Verificar solapamiento
+        return (inicioMinutos < ausenciaFinMinutos && finMinutos > ausenciaInicioMinutos);
+      }
+      
+      // Si la ausencia cruza días, verificar si afecta a este día
+      if (ausenciaInicioDia !== ausenciaFinDia) {
+        if (ausenciaInicioDia === fecha) {
+          // Ausencia empieza este día, verificar desde qué hora
+          const horaInicioAusencia = ausenciaInicioLocal.toTimeString().slice(0, 5);
+          const inicioMinutos = horaATotalMinutos(inicioHorario);
+          const ausenciaInicioMinutos = horaATotalMinutos(horaInicioAusencia);
+          
+          return inicioMinutos >= ausenciaInicioMinutos;
+        } else if (ausenciaFinDia === fecha) {
+          // Ausencia termina este día, verificar hasta qué hora
+          const horaFinAusencia = ausenciaFinLocal.toTimeString().slice(0, 5);
+          const finMinutos = horaATotalMinutos(finHorario);
+          const ausenciaFinMinutos = horaATotalMinutos(horaFinAusencia);
+          
+          return finMinutos <= ausenciaFinMinutos;
+        } else {
+          // Ausencia cubre completamente este día
+          return true;
+        }
+      }
+      
+      return false;
     };
 
     const horariosLibres = horariosDisponibles.filter(horario => {
@@ -291,17 +379,23 @@ exports.getHorariosDisponibles = asyncHandler(async (req, res, next) => {
 
       // Verificar si hay ausencias que se solapan
       const hayAusencias = ausencias.some(ausencia => {
-        const inicioAusencia = horaATotalMinutos(ausencia.hora_inicio);
-        const finAusencia = horaATotalMinutos(ausencia.hora_fin);
-
-        return (
-          inicioHorario < finAusencia && finHorario > inicioAusencia
-        );
+        const resultado = horarioEstaEnAusencia(horario.inicio, horario.fin, ausencia);
+        if (resultado) {
+          console.log(`🕐 [HORARIO] ${horario.inicio}-${horario.fin} afectado por ausencia:`, {
+            horario: `${horario.inicio}-${horario.fin}`,
+            ausencia: `${ausencia.fecha_inicio} a ${ausencia.fecha_fin}`
+          });
+        }
+        return resultado;
       });
 
       // Log para debuggear cada horario
       if (hayAusencias) {
         console.log(`🕐 [HORARIO] ${horario.inicio}-${horario.fin} oculto por ausencia`);
+      } else if (hayCitasOcupadas) {
+        console.log(`🕐 [HORARIO] ${horario.inicio}-${horario.fin} oculto por cita ocupada`);
+      } else {
+        console.log(`🕐 [HORARIO] ${horario.inicio}-${horario.fin} DISPONIBLE`);
       }
 
       // El horario está disponible si no hay citas ocupadas Y no hay ausencias
