@@ -229,9 +229,7 @@ exports.getHorariosDisponibles = asyncHandler(async (req, res, next) => {
     const sqlAusencias = `
       SELECT 
         TIME(CONVERT_TZ(fecha_inicio, '+00:00', '-05:00')) as hora_inicio,
-        TIME(CONVERT_TZ(fecha_fin, '+00:00', '-05:00')) as hora_fin,
-        motivo,
-        descripcion
+        TIME(CONVERT_TZ(fecha_fin, '+00:00', '-05:00')) as hora_fin
       FROM ausencias_empleados
       WHERE empleado_id = ? 
         AND DATE(CONVERT_TZ(fecha_inicio, '+00:00', '-05:00')) = ?
@@ -241,9 +239,6 @@ exports.getHorariosDisponibles = asyncHandler(async (req, res, next) => {
     const ausencias = await query(sqlAusencias, [empleadoIdInt, fecha]);
     console.log('🔍 [reservacionController.getHorariosDisponibles] Ausencias del empleado:', ausencias);
     console.log('🔍 [reservacionController.getHorariosDisponibles] SQL para ausencias:', sqlAusencias);
-
-    // Verificar si el empleado está ausente todo el día
-    const empleadoAusente = ausencias.length > 0;
 
     // Función para convertir 'HH:MM' a minutos totales para comparación numérica
     const horaATotalMinutos = (hora) => {
@@ -284,28 +279,13 @@ exports.getHorariosDisponibles = asyncHandler(async (req, res, next) => {
       totalHorarios: horariosDisponibles.length,
       horariosOcupados: horariosOcupados.length,
       ausencias: ausencias.length,
-      horariosDisponibles: horariosLibres.length,
-      empleadoAusente
+      horariosDisponibles: horariosLibres.length
     });
-
-    // Preparar información sobre la ausencia si existe
-    let infoAusencia = null;
-    if (empleadoAusente && ausencias.length > 0) {
-      const ausencia = ausencias[0]; // Tomar la primera ausencia
-      infoAusencia = {
-        motivo: ausencia.motivo,
-        descripcion: ausencia.descripcion,
-        horaInicio: ausencia.hora_inicio,
-        horaFin: ausencia.hora_fin
-      };
-    }
 
     res.status(200).json({
       success: true,
       count: horariosLibres.length,
-      horarios: horariosLibres,
-      empleadoAusente,
-      infoAusencia
+      horarios: horariosLibres
     });
 
   } catch (error) {
