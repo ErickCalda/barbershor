@@ -269,6 +269,12 @@ exports.getHorariosDisponibles = asyncHandler(async (req, res, next) => {
     console.log('🔍 [reservacionController.getHorariosDisponibles] Ventana del día:', { inicioDiaUTC, finDiaUTC });
     console.log('🔍 [reservacionController.getHorariosDisponibles] Horario de trabajo:', { primerHorarioHora, ultimoHorarioHora });
     
+    // Función para convertir 'HH:MM' a minutos totales para comparación numérica
+    const horaATotalMinutos = (hora) => {
+      const [h, m] = hora.split(":").map(Number);
+      return h * 60 + m;
+    };
+    
     // Debug: Mostrar cada ausencia procesada
     ausencias.forEach((ausencia, index) => {
       // Convertir a string si es objeto Date, o usar directamente si es string
@@ -301,12 +307,6 @@ exports.getHorariosDisponibles = asyncHandler(async (req, res, next) => {
         horaFinMinutos: horaATotalMinutos(ausenciaFinLocal.toTimeString().slice(0, 5))
       });
     });
-
-    // Función para convertir 'HH:MM' a minutos totales para comparación numérica
-    const horaATotalMinutos = (hora) => {
-      const [h, m] = hora.split(":").map(Number);
-      return h * 60 + m;
-    };
 
     // Función para verificar si un horario está afectado por una ausencia
     const horarioEstaEnAusencia = (inicioHorario, finHorario, ausencia) => {
