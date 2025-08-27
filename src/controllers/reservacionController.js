@@ -219,23 +219,9 @@ exports.getHorariosDisponibles = asyncHandler(async (req, res, next) => {
     const primerHorarioUTC = new Date(`${fecha}T${primerHorarioHora}:00-05:00`).toISOString().slice(0, 19).replace('T', ' ');
     const ultimoHorarioUTC = new Date(`${fecha}T${ultimoHorarioHora}:00-05:00`).toISOString().slice(0, 19).replace('T', ' ');
 
-    // Verificar si el empleado tiene ausencia aprobada que cubra COMPLETAMENTE el horario de trabajo del día
-    // Solo marcar empleadoAusente si la ausencia cubre desde antes del primer horario hasta después del último
-    const sqlAusenciaDiaCompleto = `
-      SELECT 1
-      FROM ausencias_empleados ae
-      WHERE ae.empleado_id = ?
-        AND ae.aprobada = 1
-        AND ae.motivo IN ('Vacaciones', 'Enfermedad', 'Permiso', 'Otro')
-        AND ae.fecha_inicio <= ?
-        AND ae.fecha_fin >= ?
-      LIMIT 1
-    `;
-
-    const ausenteDiaCompleto = await query(sqlAusenciaDiaCompleto, [empleadoIdInt, ultimoHorarioUTC, primerHorarioUTC]);
-    if (ausenteDiaCompleto.length > 0) {
-      return res.status(200).json({ success: true, empleadoAusente: true, horarios: [], count: 0 });
-    }
+    // NO marcar empleadoAusente automáticamente aquí
+    // En su lugar, vamos a filtrar los horarios específicos donde hay ausencia
+    // y solo marcar ausente si no quedan horarios disponibles
 
     const sqlHorariosOcupados = `
       SELECT 
@@ -279,6 +265,9 @@ exports.getHorariosDisponibles = asyncHandler(async (req, res, next) => {
     ]);
     console.log('🔍 [reservacionController.getHorariosDisponibles] Ausencias del empleado:', ausencias);
     console.log('🔍 [reservacionController.getHorariosDisponibles] SQL para ausencias:', sqlAusencias);
+    console.log('🔍 [reservacionController.getHorariosDisponibles] Fecha consultada:', fecha);
+    console.log('🔍 [reservacionController.getHorariosDisponibles] Ventana del día:', { inicioDiaUTC, finDiaUTC });
+    console.log('🔍 [reservacionController.getHorariosDisponibles] Horario de trabajo:', { primerHorarioHora, ultimoHorarioHora });
 
     // Función para convertir 'HH:MM' a minutos totales para comparación numérica
     const horaATotalMinutos = (hora) => {
@@ -310,6 +299,11 @@ exports.getHorariosDisponibles = asyncHandler(async (req, res, next) => {
         );
       });
 
+      // Log para debuggear cada horario
+      if (hayAusencias) {
+        console.log(`🕐 [HORARIO] ${horario.inicio}-${horario.fin} oculto por ausencia`);
+      }
+
       // El horario está disponible si no hay citas ocupadas Y no hay ausencias
       return !hayCitasOcupadas && !hayAusencias;
     });
@@ -321,6 +315,17 @@ exports.getHorariosDisponibles = asyncHandler(async (req, res, next) => {
       ausencias: ausencias.length,
       horariosDisponibles: horariosLibres.length
     });
+
+    // Solo marcar empleadoAusente si realmente no quedan horarios disponibles
+    if (horariosLibres.length === 0) {
+      return res.status(200).json({ 
+        success: true, 
+        empleadoAusente: true, 
+        horarios: [], 
+        count: 0,
+        mensaje: 'El empleado no tiene horarios disponibles en la fecha seleccionada'
+      });
+    }
 
     res.status(200).json({
       success: true,
