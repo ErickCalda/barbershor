@@ -104,7 +104,6 @@ exports.getEmpleadosDisponibles = asyncHandler(async (req, res, next) => {
           SELECT ae.empleado_id
           FROM ausencias_empleados ae
           WHERE ae.motivo IN ('Vacaciones', 'Enfermedad', 'Permiso', 'Otro')
-            AND ae.aprobada = 1
             AND (
               (ae.fecha_inicio < ? AND ae.fecha_fin > ?) OR
               (ae.fecha_inicio < ? AND ae.fecha_fin > ?) OR
@@ -208,21 +207,6 @@ exports.getHorariosDisponibles = asyncHandler(async (req, res, next) => {
       ];
     }
 
-    // Calcular ventana del día en UTC con base -05:00
-    const inicioDiaUTC = new Date(`${fecha}T00:00:00-05:00`).toISOString().slice(0, 19).replace('T', ' ');
-    const finDiaUTC = new Date(`${fecha}T23:59:59-05:00`).toISOString().slice(0, 19).replace('T', ' ');
-
-    // Calcular el horario de trabajo del día (primer y último horario disponible)
-    const primerHorarioHora = horariosDisponibles[0].inicio;
-    const ultimoHorarioHora = horariosDisponibles[horariosDisponibles.length - 1].fin;
-    
-    const primerHorarioUTC = new Date(`${fecha}T${primerHorarioHora}:00-05:00`).toISOString().slice(0, 19).replace('T', ' ');
-    const ultimoHorarioUTC = new Date(`${fecha}T${ultimoHorarioHora}:00-05:00`).toISOString().slice(0, 19).replace('T', ' ');
-
-    // NO marcar empleadoAusente automáticamente aquí
-    // En su lugar, vamos a filtrar los horarios específicos donde hay ausencia
-    // y solo marcar ausente si no quedan horarios disponibles
-
     const sqlHorariosOcupados = `
       SELECT 
         TIME(CONVERT_TZ(fecha_hora_inicio, '+00:00', '-05:00')) as hora_inicio,
@@ -241,115 +225,30 @@ exports.getHorariosDisponibles = asyncHandler(async (req, res, next) => {
     console.log('🔍 [reservacionController.getHorariosDisponibles] Horarios ocupados:', horariosOcupados);
     console.log('🔍 [reservacionController.getHorariosDisponibles] SQL para horarios ocupados:', sqlHorariosOcupados);
 
-    // Consultar ausencias por horas específicas que se solapan con el día
+    // Consultar ausencias del empleado para la fecha específica
     const sqlAusencias = `
       SELECT 
-        fecha_inicio,
-        fecha_fin
+        TIME(CONVERT_TZ(fecha_inicio, '+00:00', '-05:00')) as hora_inicio,
+        TIME(CONVERT_TZ(fecha_fin, '+00:00', '-05:00')) as hora_fin,
+        motivo,
+        descripcion
       FROM ausencias_empleados
       WHERE empleado_id = ? 
-        AND aprobada = 1
+        AND DATE(CONVERT_TZ(fecha_inicio, '+00:00', '-05:00')) = ?
         AND motivo IN ('Vacaciones', 'Enfermedad', 'Permiso', 'Otro')
-        AND (
-          (fecha_inicio <= ? AND fecha_fin >= ?) OR  -- Ausencia cubre todo el día
-          (fecha_inicio <= ? AND fecha_fin >= ?) OR  -- Ausencia empieza antes y termina durante el día
-          (fecha_inicio >= ? AND fecha_fin <= ?)     -- Ausencia está completamente dentro del día
-        )
     `;
 
-    const ausencias = await query(sqlAusencias, [
-      empleadoIdInt, 
-      finDiaUTC, inicioDiaUTC,      // Ausencia cubre todo el día
-      finDiaUTC, inicioDiaUTC,      // Ausencia empieza antes y termina durante
-      inicioDiaUTC, finDiaUTC       // Ausencia está completamente dentro del día
-    ]);
+    const ausencias = await query(sqlAusencias, [empleadoIdInt, fecha]);
     console.log('🔍 [reservacionController.getHorariosDisponibles] Ausencias del empleado:', ausencias);
     console.log('🔍 [reservacionController.getHorariosDisponibles] SQL para ausencias:', sqlAusencias);
-    console.log('🔍 [reservacionController.getHorariosDisponibles] Fecha consultada:', fecha);
-    console.log('🔍 [reservacionController.getHorariosDisponibles] Ventana del día:', { inicioDiaUTC, finDiaUTC });
-    console.log('🔍 [reservacionController.getHorariosDisponibles] Horario de trabajo:', { primerHorarioHora, ultimoHorarioHora });
-    
+
+    // Verificar si el empleado está ausente todo el día
+    const empleadoAusente = ausencias.length > 0;
+
     // Función para convertir 'HH:MM' a minutos totales para comparación numérica
     const horaATotalMinutos = (hora) => {
       const [h, m] = hora.split(":").map(Number);
       return h * 60 + m;
-    };
-    
-    // Debug: Mostrar cada ausencia procesada
-    ausencias.forEach((ausencia, index) => {
-      // Convertir a string si es objeto Date, o usar directamente si es string
-      const fechaInicioStr = ausencia.fecha_inicio instanceof Date 
-        ? ausencia.fecha_inicio.toISOString() 
-        : ausencia.fecha_inicio;
-      const fechaFinStr = ausencia.fecha_fin instanceof Date 
-        ? ausencia.fecha_fin.toISOString() 
-        : ausencia.fecha_fin;
-      
-      // Extraer fechas y horas directamente
-      const fechaInicio = fechaInicioStr.split('T')[0];
-      const fechaFin = fechaFinStr.split('T')[0];
-      const horaInicio = fechaInicioStr.split('T')[1]?.slice(0, 5) || '00:00';
-      const horaFin = fechaFinStr.split('T')[1]?.slice(0, 5) || '23:59';
-      
-      console.log(`🔍 [AUSENCIA ${index + 1}]`, {
-        original: { inicio: ausencia.fecha_inicio, fin: ausencia.fecha_fin },
-        tipo: { 
-          inicio: typeof ausencia.fecha_inicio, 
-          fin: typeof ausencia.fecha_fin 
-        },
-        fechaInicio: fechaInicio,
-        fechaFin: fechaFin,
-        horaInicio: horaInicio,
-        horaFin: horaFin,
-        afectaFecha: fechaInicio === fecha || 
-                    fechaFin === fecha ||
-                    (new Date(fecha) >= new Date(fechaInicio) && 
-                     new Date(fecha) <= new Date(fechaFin)),
-        horaInicioMinutos: horaATotalMinutos(horaInicio),
-        horaFinMinutos: horaATotalMinutos(horaFin),
-        descripcion: `Ausencia del ${fechaInicio} ${horaInicio} al ${fechaFin} ${horaFin}`
-      });
-    });
-
-    // Función para verificar si un horario está afectado por una ausencia
-    const horarioEstaEnAusencia = (inicioHorario, finHorario, ausencia) => {
-      // Convertir a string si es objeto Date, o usar directamente si es string
-      const fechaInicioStr = ausencia.fecha_inicio instanceof Date 
-        ? ausencia.fecha_inicio.toISOString() 
-        : ausencia.fecha_inicio;
-      const fechaFinStr = ausencia.fecha_fin instanceof Date 
-        ? ausencia.fecha_fin.toISOString() 
-        : ausencia.fecha_fin;
-      
-      // Extraer fecha y hora de la ausencia
-      const ausenciaInicioDia = fechaInicioStr.split('T')[0];
-      const ausenciaFinDia = fechaFinStr.split('T')[0];
-      const horaInicioAusencia = fechaInicioStr.split('T')[1]?.slice(0, 5) || '00:00';
-      const horaFinAusencia = fechaFinStr.split('T')[1]?.slice(0, 5) || '23:59';
-      
-      console.log(`🔍 [HORARIO_AUSENCIA] Analizando horario ${inicioHorario}-${finHorario} para fecha ${fecha}`);
-      console.log(`🔍 [HORARIO_AUSENCIA] Ausencia: ${ausenciaInicioDia} ${horaInicioAusencia} a ${ausenciaFinDia} ${horaFinAusencia}`);
-      
-      // Si la ausencia no afecta a este día, retornar false
-      if (fecha < ausenciaInicioDia || fecha > ausenciaFinDia) {
-        console.log(`🔍 [HORARIO_AUSENCIA] Ausencia no afecta a este día`);
-        return false;
-      }
-      
-      // Convertir a minutos para comparación
-      const inicioMinutos = horaATotalMinutos(inicioHorario);
-      const finMinutos = horaATotalMinutos(finHorario);
-      const ausenciaInicioMinutos = horaATotalMinutos(horaInicioAusencia);
-      const ausenciaFinMinutos = horaATotalMinutos(horaFinAusencia);
-      
-      console.log(`🔍 [HORARIO_AUSENCIA] Horario: ${inicioMinutos}-${finMinutos}, Ausencia: ${ausenciaInicioMinutos}-${ausenciaFinMinutos}`);
-      
-      // LÓGICA SIMPLIFICADA: Solo verificar solapamiento de horas
-      // Si el horario se solapa con la ausencia, ocultarlo
-      const haySolapamiento = (inicioMinutos < ausenciaFinMinutos && finMinutos > ausenciaInicioMinutos);
-      
-      console.log(`🔍 [HORARIO_AUSENCIA] ¿Hay solapamiento? ${haySolapamiento}`);
-      return haySolapamiento;
     };
 
     const horariosLibres = horariosDisponibles.filter(horario => {
@@ -368,27 +267,13 @@ exports.getHorariosDisponibles = asyncHandler(async (req, res, next) => {
 
       // Verificar si hay ausencias que se solapan
       const hayAusencias = ausencias.some(ausencia => {
-        const resultado = horarioEstaEnAusencia(horario.inicio, horario.fin, ausencia);
-        if (resultado) {
-          console.log(`🕐 [HORARIO] ${horario.inicio}-${horario.fin} afectado por ausencia:`, {
-            horario: `${horario.inicio}-${horario.fin}`,
-            ausencia: `${ausencia.fecha_inicio} a ${ausencia.fecha_fin}`,
-            fechaConsultada: fecha,
-            resultado: resultado,
-            horarioMinutos: `${horaATotalMinutos(horario.inicio)}-${horaATotalMinutos(horario.fin)}`
-          });
-        }
-        return resultado;
-      });
+        const inicioAusencia = horaATotalMinutos(ausencia.hora_inicio);
+        const finAusencia = horaATotalMinutos(ausencia.hora_fin);
 
-      // Log para debuggear cada horario
-      if (hayAusencias) {
-        console.log(`🕐 [HORARIO] ${horario.inicio}-${horario.fin} oculto por ausencia`);
-      } else if (hayCitasOcupadas) {
-        console.log(`🕐 [HORARIO] ${horario.inicio}-${horario.fin} oculto por cita ocupada`);
-      } else {
-        console.log(`🕐 [HORARIO] ${horario.inicio}-${horario.fin} DISPONIBLE`);
-      }
+        return (
+          inicioHorario < finAusencia && finHorario > inicioAusencia
+        );
+      });
 
       // El horario está disponible si no hay citas ocupadas Y no hay ausencias
       return !hayCitasOcupadas && !hayAusencias;
@@ -400,30 +285,27 @@ exports.getHorariosDisponibles = asyncHandler(async (req, res, next) => {
       horariosOcupados: horariosOcupados.length,
       ausencias: ausencias.length,
       horariosDisponibles: horariosLibres.length,
-      fechaConsultada: fecha,
-      horariosOcultos: horariosDisponibles.length - horariosLibres.length
+      empleadoAusente
     });
 
-    // Solo marcar empleadoAusente si realmente no quedan horarios disponibles
-    if (horariosLibres.length === 0) {
-      console.log('🔍 [reservacionController.getHorariosDisponibles] No hay horarios disponibles, marcando empleadoAusente: true');
-      console.log('🔍 [reservacionController.getHorariosDisponibles] Razón: Todos los horarios fueron ocultados por ausencias o citas ocupadas');
-      return res.status(200).json({ 
-        success: true, 
-        empleadoAusente: true, 
-        horarios: [], 
-        count: 0,
-        mensaje: 'El empleado no tiene horarios disponibles en la fecha seleccionada'
-      });
+    // Preparar información sobre la ausencia si existe
+    let infoAusencia = null;
+    if (empleadoAusente && ausencias.length > 0) {
+      const ausencia = ausencias[0]; // Tomar la primera ausencia
+      infoAusencia = {
+        motivo: ausencia.motivo,
+        descripcion: ausencia.descripcion,
+        horaInicio: ausencia.hora_inicio,
+        horaFin: ausencia.hora_fin
+      };
     }
 
-    console.log('🔍 [reservacionController.getHorariosDisponibles] Hay horarios disponibles, retornando horarios normales');
-    console.log('🔍 [reservacionController.getHorariosDisponibles] Horarios disponibles:', horariosLibres.map(h => `${h.inicio}-${h.fin}`));
-    console.log('🔍 [reservacionController.getHorariosDisponibles] Horarios ocultos:', horariosDisponibles.filter(h => !horariosLibres.includes(h)).map(h => `${h.inicio}-${h.fin}`));
     res.status(200).json({
       success: true,
       count: horariosLibres.length,
-      horarios: horariosLibres
+      horarios: horariosLibres,
+      empleadoAusente,
+      infoAusencia
     });
 
   } catch (error) {
