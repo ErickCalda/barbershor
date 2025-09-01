@@ -249,18 +249,9 @@ class NotificacionPushService {
       
       if (tokens.length === 0) {
         console.log('⚠️ [notificacionPushService.enviarNotificacionEmpleado] No se encontraron tokens FCM para el empleado. Enviando correo electrónico.');
-        // Enviar correo electrónico al empleado
+        // Enviar correo electrónico al empleado usando el servicio completo
         if (cita.empleado_email) {
-          const fecha = formatearFechaHora(cita.fecha_hora_inicio, 'corta');
-          const hora = formatearFechaHora(cita.fecha_hora_inicio, 'solo_hora');
-          const asunto = '📅 Nueva Cita Asignada';
-          const mensaje = `Tienes una cita con ${cita.cliente_nombre} el ${fecha} a las ${hora}. Servicios: ${cita.servicios}`;
-          await emailService.transporter.sendMail({
-            from: process.env.EMAIL_USER,
-            to: cita.empleado_email,
-            subject: asunto,
-            html: `<p>${mensaje}</p>`
-          });
+          await emailService.enviarNotificacionEmpleado(cita.id);
           console.log('✅ [notificacionPushService.enviarNotificacionEmpleado] Correo enviado al empleado.');
         } else {
           console.log('❌ [notificacionPushService.enviarNotificacionEmpleado] El empleado no tiene correo registrado.');
@@ -271,26 +262,31 @@ class NotificacionPushService {
       // Verificar si Firebase está disponible para notificaciones push
       if (!this.firebaseAvailable) {
         console.log('⚠️ [notificacionPushService.enviarNotificacionEmpleado] Firebase no disponible, enviando solo correo electrónico.');
-        // Enviar correo electrónico al empleado como respaldo
+        // Enviar correo electrónico al empleado como respaldo usando el servicio completo
         if (cita.empleado_email) {
-          const fecha = formatearFechaHora(cita.fecha_hora_inicio, 'corta');
-          const hora = formatearFechaHora(cita.fecha_hora_inicio, 'solo_hora');
-          const asunto = '📅 Nueva Cita Asignada';
-          const mensaje = `Tienes una cita con ${cita.cliente_nombre} el ${fecha} a las ${hora}. Servicios: ${cita.servicios}`;
-          await emailService.transporter.sendMail({
-            from: process.env.EMAIL_USER,
-            to: cita.empleado_email,
-            subject: asunto,
-            html: `<p>${mensaje}</p>`
-          });
+          await emailService.enviarNotificacionEmpleado(cita.id);
           console.log('✅ [notificacionPushService.enviarNotificacionEmpleado] Correo enviado al empleado.');
         }
         return;
       }
 
       const fcmTokens = tokens.map(t => t.token_dispositivo);
+      
+      // Debug: Log de la fecha original para empleados
+      console.log('🔍 [notificacionPushService.enviarNotificacionEmpleado] Fecha original:', {
+        fecha_hora_inicio: cita.fecha_hora_inicio,
+        tipo: typeof cita.fecha_hora_inicio,
+        timestamp: new Date(cita.fecha_hora_inicio).getTime()
+      });
+      
       const fecha = formatearFechaHora(cita.fecha_hora_inicio, 'corta');
       const hora = formatearFechaHora(cita.fecha_hora_inicio, 'solo_hora');
+      
+      // Debug: Log de las fechas formateadas para empleados
+      console.log('🔍 [notificacionPushService.enviarNotificacionEmpleado] Fechas formateadas:', {
+        fecha: fecha,
+        hora: hora
+      });
 
       const message = {
         notification: {
