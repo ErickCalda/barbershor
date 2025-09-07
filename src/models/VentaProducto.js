@@ -510,6 +510,64 @@ class VentaProducto {
   }
 
   /**
+   * Obtener serie temporal de ventas agrupada por día/mes/año
+   * @param {Object} opciones
+   * @param {'dia'|'mes'|'anio'} opciones.periodo
+   * @param {string|null} opciones.fecha_inicio - ISO fecha/hora
+   * @param {string|null} opciones.fecha_fin - ISO fecha/hora
+   * @returns {Promise<Array>} Filas con periodo, total_ventas, monto_total, impuesto_total
+   */
+  static async obtenerSerie(opciones = {}) {
+    const { periodo = 'dia', fecha_inicio = null, fecha_fin = null } = opciones;
+
+    let dateExpr;
+    switch (periodo) {
+      case 'anio':
+        dateExpr = "DATE_FORMAT(vp.fecha_venta, '%Y')";
+        break;
+      case 'mes':
+        dateExpr = "DATE_FORMAT(vp.fecha_venta, '%Y-%m')";
+        break;
+      default:
+        dateExpr = "DATE_FORMAT(vp.fecha_venta, '%Y-%m-%d')";
+    }
+
+    let whereConditions = [];
+    let params = [];
+
+    if (fecha_inicio) {
+      whereConditions.push('vp.fecha_venta >= ?');
+      params.push(fecha_inicio);
+    }
+
+    if (fecha_fin) {
+      whereConditions.push('vp.fecha_venta <= ?');
+      params.push(fecha_fin);
+    }
+
+    const whereClause = whereConditions.length > 0 ? `WHERE ${whereConditions.join(' AND ')}` : '';
+
+    const sql = `
+      SELECT 
+        ${dateExpr} AS periodo,
+        COUNT(*) AS total_ventas,
+        SUM(vp.total) AS monto_total,
+        SUM(vp.impuesto) AS impuesto_total
+      FROM ventas_productos vp
+      ${whereClause}
+      GROUP BY periodo
+      ORDER BY periodo ASC
+    `;
+
+    try {
+      const rows = await query(sql, params);
+      return rows;
+    } catch (error) {
+      throw new Error(`Error al obtener serie de ventas: ${error.message}`);
+    }
+  }
+
+  /**
    * Obtener ventas del día
    * @param {string} fecha - Fecha específica (YYYY-MM-DD)
    * @returns {Promise<Array>} Ventas del día

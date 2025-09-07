@@ -234,7 +234,8 @@ exports.getDisponibilidadEmpleado = asyncHandler(async (req, res, next) => {
 // @access  Private (Admin, Dueño)
 exports.getStatsCitas = asyncHandler(async (req, res, next) => {
     try {
-        const estadisticas = await Cita.obtenerEstadisticas(req.query);
+        const { periodo = 'mes' } = req.query;
+        const estadisticas = await Cita.obtenerEstadisticas(periodo);
 
         res.status(200).json({
             success: true,
@@ -244,6 +245,19 @@ exports.getStatsCitas = asyncHandler(async (req, res, next) => {
         next(new ErrorResponse(error.message, 500));
     }
 }); 
+
+// @desc    Serie temporal de citas
+// @route   GET /api/citas/serie
+// @access  Private (Admin, Dueño)
+exports.getSerieCitas = asyncHandler(async (req, res, next) => {
+    try {
+        const { periodo = 'dia', fecha_inicio, fecha_fin } = req.query;
+        const data = await Cita.obtenerSerie(periodo, fecha_inicio, fecha_fin);
+        res.status(200).json({ success: true, data });
+    } catch (error) {
+        next(new ErrorResponse(error.message, 500));
+    }
+});
 
 
 

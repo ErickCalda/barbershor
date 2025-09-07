@@ -196,12 +196,26 @@ exports.getVentasPorRango = asyncHandler(async (req, res, next) => {
 // @access  Private (Admin, Dueño)
 exports.getEstadisticasVentas = asyncHandler(async (req, res, next) => {
     try {
-        const { fecha_inicio, fecha_fin } = req.query;
-        const estadisticas = await VentaProducto.obtenerEstadisticas(fecha_inicio, fecha_fin);
+        const { fecha_inicio, fecha_fin, empleado_id } = req.query;
+        const opciones = { fecha_inicio, fecha_fin, empleado_id };
+        const estadisticas = await VentaProducto.obtenerEstadisticas(opciones);
         res.status(200).json({
             success: true,
             data: estadisticas
         });
+    } catch (error) {
+        next(new ErrorResponse(error.message, 500));
+    }
+});
+
+// @desc    Obtener serie de ventas agrupada por periodo
+// @route   GET /api/ventas/serie
+// @access  Private (Admin, Dueño)
+exports.getSerieVentas = asyncHandler(async (req, res, next) => {
+    try {
+        const { periodo = 'dia', fecha_inicio, fecha_fin } = req.query;
+        const data = await VentaProducto.obtenerSerie({ periodo, fecha_inicio, fecha_fin });
+        res.status(200).json({ success: true, data });
     } catch (error) {
         next(new ErrorResponse(error.message, 500));
     }

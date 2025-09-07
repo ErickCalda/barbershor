@@ -575,6 +575,54 @@ class Cita {
   }
 
   /**
+   * Obtener serie de citas agrupada por día/mes/año
+   * @param {'dia'|'mes'|'anio'} periodo
+   * @param {string|null} fecha_inicio
+   * @param {string|null} fecha_fin
+   * @returns {Promise<Array>}
+   */
+  static async obtenerSerie(periodo = 'dia', fecha_inicio = null, fecha_fin = null) {
+    try {
+      let dateExpr;
+      switch (periodo) {
+        case 'anio':
+          dateExpr = "DATE_FORMAT(c.fecha_hora_inicio, '%Y')";
+          break;
+        case 'mes':
+          dateExpr = "DATE_FORMAT(c.fecha_hora_inicio, '%Y-%m')";
+          break;
+        default:
+          dateExpr = "DATE_FORMAT(c.fecha_hora_inicio, '%Y-%m-%d')";
+      }
+
+      const condiciones = [];
+      const params = [];
+      if (fecha_inicio) { condiciones.push('c.fecha_hora_inicio >= ?'); params.push(fecha_inicio); }
+      if (fecha_fin) { condiciones.push('c.fecha_hora_inicio <= ?'); params.push(fecha_fin); }
+      const whereClause = condiciones.length ? 'WHERE ' + condiciones.join(' AND ') : '';
+
+      const sql = `
+        SELECT 
+          ${dateExpr} AS periodo,
+          COUNT(*) AS total_citas,
+          COUNT(CASE WHEN ec.nombre = 'Completada' THEN 1 END) AS completadas,
+          COUNT(CASE WHEN ec.nombre = 'Cancelada' THEN 1 END) AS canceladas
+        FROM citas c
+        INNER JOIN estados_citas ec ON c.estado_id = ec.id
+        ${whereClause}
+        GROUP BY periodo
+        ORDER BY periodo ASC
+      `;
+
+      const rows = await query(sql, params);
+      return rows;
+    } catch (error) {
+      console.error('Error obteniendo serie de citas:', error);
+      throw error;
+    }
+  }
+
+  /**
    * Agregar servicio a cita
    * @param {number} cita_id - ID de la cita
    * @param {number} servicio_id - ID del servicio

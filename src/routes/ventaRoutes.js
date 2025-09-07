@@ -67,4 +67,12 @@ router.get('/stats', [
     query('fecha_fin').optional().isISO8601().withMessage('Fecha de fin debe ser válida')
 ], handleValidation, ventaController.getEstadisticasVentas);
 
+// --- Serie temporal de ventas ---
+router.get('/serie', [
+    authorize('administrador', 'dueño'),
+    query('periodo').optional().isIn(['dia','mes','anio']).withMessage('Periodo inválido'),
+    query('fecha_inicio').optional().isISO8601().withMessage('Fecha de inicio debe ser válida'),
+    query('fecha_fin').optional().isISO8601().withMessage('Fecha de fin debe ser válida')
+], handleValidation, ventaController.getSerieVentas);
+
 module.exports = router;

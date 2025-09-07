@@ -20,6 +20,13 @@ router.get('/estadisticas', [
   authorize('administrador', 'dueño', 'empleado')
 ], citaController.getStatsCitas);
 
+router.get('/serie', [
+  authorize('administrador', 'dueño'),
+  query('periodo').optional().isIn(['dia','mes','anio']).withMessage('Periodo inválido'),
+  query('fecha_inicio').optional().isISO8601().withMessage('Fecha de inicio inválida'),
+  query('fecha_fin').optional().isISO8601().withMessage('Fecha fin inválida')
+], handleValidation, citaController.getSerieCitas);
+
 // 🔥 ESTA ES LA RUTA QUE DEBÍA ESTAR ANTES DE `/:id`
 router.get('/estados', [
   authorize('administrador', 'dueño', 'empleado')

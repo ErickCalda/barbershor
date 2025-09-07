@@ -288,8 +288,20 @@ class EmailService {
   }
 
   generarTemplateNotificacionEmpleado(cita) {
+    // Debug: Log de la fecha en el template para empleados
+    console.log('🔍 [emailService.generarTemplateNotificacionEmpleado] Fecha en template:', {
+      fecha_hora_inicio: cita.fecha_hora_inicio,
+      tipo: typeof cita.fecha_hora_inicio
+    });
+    
     const fechaFormateada = formatearFechaParaEmail(cita.fecha_hora_inicio);
     const rangoHoras = formatearRangoFechas(cita.fecha_hora_inicio, cita.fecha_hora_fin);
+    
+    // Debug: Log de las fechas formateadas en el template
+    console.log('🔍 [emailService.generarTemplateNotificacionEmpleado] Fechas formateadas en template:', {
+      fechaFormateada: fechaFormateada,
+      rangoHoras: rangoHoras
+    });
 
     return `
       <!DOCTYPE html>
